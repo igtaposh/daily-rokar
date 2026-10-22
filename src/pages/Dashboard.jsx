@@ -18,6 +18,7 @@ import {
   FiUser,
   FiX,
   FiRefreshCw,
+  FiTrash2,
 } from "react-icons/fi";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.svg";
@@ -25,6 +26,7 @@ import { AuthContext } from "../context/AuthContext";
 import { LuLoaderCircle, LuPencil } from "react-icons/lu";
 import axiosInstance, { setAuthToken } from "../api/axiosInstance";
 import { RecordContext } from "../context/RecordContext";
+import { AepsContext } from "../context/AepsContext";
 const getDateKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
@@ -93,8 +95,8 @@ const formatDate = (date) =>
 function Dashboard() {
   const { user, setUser, setToken } = useContext(AuthContext);
   const { records, setRecords } = useContext(RecordContext);
+  const { transactions, setTransactions } = useContext(AepsContext);
   const navigate = useNavigate();
-  const [aepsResult, setAepsResult] = useState({ rangeKey: "", records: [] });
   const [weeklyRecords, setWeeklyRecords] = useState([]);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profileMode, setProfileMode] = useState("details");
@@ -108,13 +110,15 @@ function Dashboard() {
   );
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [recordsRefresh, setRecordsRefresh] = useState(0);
+  const [deletingTransactionKey, setDeletingTransactionKey] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState(null);
   const [transactionFilter, setTransactionFilter] = useState("all");
   const [isEntryFormOpen, setIsEntryFormOpen] = useState(false);
   const [entryType, setEntryType] = useState("sale");
   const [entryForm, setEntryForm] = useState({
     description: "",
     category: saleCategories[0],
-    amount: null,
+    amount: 0,
     payment: "Cash",
     type: "withdrawal",
     name: "",
@@ -327,10 +331,7 @@ function Dashboard() {
         );
 
         if (isCurrentRequest && res?.status === 200) {
-          setAepsResult({
-            rangeKey: `${startDate}:${endDate}`,
-            records: res.data.aeps,
-          });
+          setTransactions(res.data.aeps);
         }
       } catch {
         if (isCurrentRequest) {
@@ -342,12 +343,19 @@ function Dashboard() {
       }
     };
 
+    setTransactions([]);
     fetchAepsData();
 
     return () => {
       isCurrentRequest = false;
     };
-  }, [period, selectedStartDate, selectedEndDate, recordsRefresh]);
+  }, [
+    period,
+    selectedStartDate,
+    selectedEndDate,
+    recordsRefresh,
+    setTransactions,
+  ]);
 
   useEffect(() => {
     let isCurrentRequest = true;
@@ -383,16 +391,7 @@ function Dashboard() {
   const countdownText = `${String(Math.floor(secondsUntilResend / 60)).padStart(2, "0")}:${String(secondsUntilResend % 60).padStart(2, "0")}`;
 
   const todayKey = getDateKey();
-  const currentDateRange = getPeriodDateRange(
-    period,
-    selectedStartDate,
-    selectedEndDate,
-  );
-  const aepsRecords =
-    aepsResult.rangeKey ===
-    `${currentDateRange.startDate}:${currentDateRange.endDate}`
-      ? aepsResult.records
-      : [];
+  const aepsRecords = transactions;
   const periodSales = records
     .filter((transaction) => transaction.type === "sale")
     .reduce((total, transaction) => total + transaction.amount, 0);
@@ -696,6 +695,9 @@ function Dashboard() {
       category: categories[0],
       amount: "",
       payment: "Cash",
+      type: "withdrawal",
+      name: "",
+      adharNumber: "",
     });
     setMessage({
       type: "",
@@ -733,17 +735,30 @@ function Dashboard() {
       });
 
       if (res?.status === 201) {
+        const newAEPS = res.data.newAEPS;
+        const isWithdrawal = newAEPS.type?.toLowerCase() === "withdrawal";
+        const balanceField = isWithdrawal ? "aepsOnline" : "aeps";
+        const amount = Number(newAEPS.amount);
+        setUser((currentUser) => {
+          if (!currentUser) return currentUser;
+
+          return {
+            ...currentUser,
+            ...(res.data.user || {
+              [balanceField]:
+                Number(currentUser[balanceField] ?? 0) + amount,
+            }),
+          };
+        });
+
         setMessage({
           type: "success",
-          text: "AEPS transaction created successfully.",
+          text: `AEPS transaction record created successfully.`,
         });
         setRecordsRefresh((refresh) => refresh + 1);
-        setTimeout(() => {
-          setIsEntryFormOpen(false);
-        }, 750);
+        setIsEntryFormOpen(false);
       }
     } catch (err) {
-      console.log(err);
       setMessage({
         type: "error",
         text:
@@ -782,16 +797,13 @@ function Dashboard() {
       });
 
       if (res?.status === 201) {
-        setMessage({
-          type: "success",
-          text: `${entryType} record created successfully.`,
-        });
+        const newRecord = res.data.newRecord;
         const balanceField =
-          entryForm.payment.toLowerCase() === "online"
+          newRecord.payment?.toLowerCase() === "online"
             ? "rokarOnline"
             : "rokar";
-        const amountChange =
-          (entryType === "sale" ? 1 : -1) * Number(entryForm.amount);
+        const amount = Number(newRecord.amount);
+        const amountChange = (newRecord.type === "sale" ? 1 : -1) * amount;
         setUser((currentUser) => {
           if (!currentUser) return currentUser;
 
@@ -799,18 +811,21 @@ function Dashboard() {
             ...currentUser,
             ...(res.data.user || {
               [balanceField]:
-                Number(currentUser[balanceField] || 0) + amountChange,
+                Number(currentUser[balanceField] ?? 0) + amountChange,
             }),
           };
         });
-        console.log(res.data.newRecord);
+
+        setMessage({
+          type: "success",
+          text: `${entryType} record created successfully.`,
+        });
         setRecordsRefresh((refresh) => refresh + 1);
         setTimeout(() => {
           setIsEntryFormOpen(false);
         }, 750);
       }
     } catch (err) {
-      console.log(err);
       setMessage({
         type: "error",
         text:
@@ -819,6 +834,85 @@ function Dashboard() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteRecord = async (record) => {
+    const deletionKey = `record:${record._id}`;
+    setDeletingTransactionKey(deletionKey);
+
+    try {
+      const res = await axiosInstance.delete(
+        `/record/delete/${encodeURIComponent(record._id)}`,
+      );
+      const balanceField =
+        record.payment?.toLowerCase() === "online"
+          ? "rokarOnline"
+          : "rokar";
+      const amountChange =
+        (record.type === "sale" ? -1 : 1) * Number(record.amount);
+
+      setUser((currentUser) => {
+        if (!currentUser) return currentUser;
+
+        return {
+          ...currentUser,
+          ...(res.data?.user || {
+            [balanceField]:
+              Number(currentUser[balanceField] ?? 0) + amountChange,
+          }),
+        };
+      });
+      setRecordsRefresh((refresh) => refresh + 1);
+      setDeleteConfirmation(null);
+    } catch (err) {
+      setDeleteConfirmation(null);
+      setError(
+        err?.response?.data?.message ||
+          "Unable to delete this record. Please try again.",
+      );
+      setErrorPopup(true);
+    } finally {
+      setDeletingTransactionKey("");
+    }
+  };
+
+  const handleDeleteAepsTransaction = async (transaction) => {
+    const deletionKey = `aeps:${transaction._id}`;
+    setDeletingTransactionKey(deletionKey);
+
+    try {
+      const res = await axiosInstance.delete(
+        `/aeps/delete/${encodeURIComponent(transaction._id)}`,
+      );
+      const balanceField =
+        transaction.type?.toLowerCase() === "withdrawal"
+          ? "aepsOnline"
+          : "aeps";
+
+      setUser((currentUser) => {
+        if (!currentUser) return currentUser;
+
+        return {
+          ...currentUser,
+          ...(res.data?.user || {
+            [balanceField]:
+              Number(currentUser[balanceField] ?? 0) -
+              Number(transaction.amount),
+          }),
+        };
+      });
+      setRecordsRefresh((refresh) => refresh + 1);
+      setDeleteConfirmation(null);
+    } catch (err) {
+      setDeleteConfirmation(null);
+      setError(
+        err?.response?.data?.message ||
+          "Unable to delete this AEPS transaction. Please try again.",
+      );
+      setErrorPopup(true);
+    } finally {
+      setDeletingTransactionKey("");
     }
   };
 
@@ -850,9 +944,9 @@ function Dashboard() {
           <a
             key={label}
             href={href}
-            className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition ${
+            className={`flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-medium transition ${
               index === 0
-                ? "bg-white/12 text-white"
+                ? "bg-white/12 text-white shadow-sm"
                 : "text-white/70 hover:bg-white/10 hover:text-white"
             }`}
           >
@@ -895,11 +989,11 @@ function Dashboard() {
   const totalAeps = aepsCash + aepsOnline;
 
   return (
-    <div className="min-h-screen bg-[#f1f5f1] text-[#18392f] font-[Manrope,sans-serif]">
-      <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 self-start flex-col overflow-y-auto bg-[#123d31] px-5 py-7 text-white lg:flex">
+    <div className="min-h-screen bg-[#edf2ed] font-[Manrope,sans-serif] text-[#18392f]">
+      <div className="mx-auto flex min-h-screen max-w-[1720px]">
+        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 self-start flex-col overflow-y-auto bg-gradient-to-b from-[#164b3b] to-[#10372d] px-6 py-8 text-white shadow-[8px_0_32px_rgba(18,61,49,0.08)] lg:flex">
           {sidebar}
-          <div className="mt-auto border-t border-white/15 pt-5">
+          <div className="mt-auto border-t border-white/15 pt-6">
             <p className="text-xs font-semibold text-[#c2e3a7]">SHOP LEDGER</p>
             <p className="mt-2 text-sm leading-5 text-white/70">
               Your daily sales and expenses, in one place.
@@ -907,7 +1001,7 @@ function Dashboard() {
             <button
               type="button"
               onClick={openProfileEditor}
-              className="mt-5 flex w-full items-center gap-3 rounded-md border border-white/15 p-3 text-left transition hover:bg-white/10"
+              className="mt-5 flex w-full items-center gap-3 rounded-2xl border border-white/15 bg-white/[0.04] p-3.5 text-left transition hover:bg-white/10"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#c2e3a7] text-sm font-bold text-[#123d31]">
                 {profileInitials || <FiUser size={17} aria-hidden="true" />}
@@ -925,8 +1019,8 @@ function Dashboard() {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 md:px-8 md:py-7">
-          <div className="mb-5 flex items-center justify-between lg:hidden">
+        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-9 lg:py-8">
+          <div className="mb-5 flex items-center justify-between rounded-2xl border border-[#dce6de] bg-white px-4 py-3 shadow-sm lg:hidden">
             <Link to="/" className="flex items-center gap-2.5">
               <img
                 src={logo}
@@ -939,7 +1033,7 @@ function Dashboard() {
               type="button"
               aria-label="Edit profile"
               onClick={openProfileEditor}
-              className="flex h-9 w-9 items-center justify-center rounded-md border border-[#d7e1da] bg-white text-[#64766d]"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#d7e1da] bg-[#f7faf8] text-[#64766d] transition hover:bg-[#e4f0e5]"
             >
               <FiUser size={17} aria-hidden="true" />
             </button>
@@ -947,13 +1041,13 @@ function Dashboard() {
 
           <nav
             aria-label="Dashboard sections"
-            className="mb-6 flex gap-1 overflow-x-auto border-b border-[#dce6de] pb-2 lg:hidden"
+            className="mb-6 flex gap-1.5 overflow-x-auto rounded-2xl border border-[#dce6de] bg-white p-1.5 shadow-sm lg:hidden"
           >
             {navigationItems.map(({ label, href, icon: Icon }) => (
               <a
                 key={label}
                 href={href}
-                className="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-[#64766d] hover:bg-white hover:text-[#176044]"
+                className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold text-[#64766d] transition hover:bg-[#e4f0e5] hover:text-[#176044]"
               >
                 <Icon size={15} aria-hidden="true" />
                 {label}
@@ -963,26 +1057,26 @@ function Dashboard() {
 
           <header
             id="overview"
-            className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
+            className="mb-5 flex flex-col gap-5 rounded-3xl border border-[#dce6de] bg-gradient-to-br from-white via-white to-[#f3f8f3] p-5 shadow-[0_10px_36px_rgba(24,57,47,0.05)] sm:flex-row sm:items-end sm:justify-between sm:p-7"
           >
             <div>
-              <p className="text-xs font-bold uppercase text-[#397354]">
+              <p className="inline-flex rounded-full bg-[#e4f0e5] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#397354]">
                 {formattedToday}
               </p>
-              <h1 className="mt-2 font-serif text-3xl font-semibold text-[#18392f]">
+              <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-[#18392f] sm:text-4xl">
                 Shop overview
               </h1>
-              <p className="mt-1 text-sm text-[#718078]">
+              <p className="mt-2 text-sm text-[#64766d]">
                 Track what came in, what went out, and what remains.
               </p>
-              <p className="mt-1 text-xs text-[#839188]">
+              <p className="mt-1.5 text-xs text-[#839188]">
                 Live records for your selected date range.
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
               <div className="flex flex-wrap items-center gap-2">
                 <div
-                  className="inline-flex rounded-md border border-[#d7e1da] bg-white p-1"
+                  className="inline-flex rounded-xl border border-[#d7e1da] bg-white p-1 shadow-sm"
                   aria-label="Summary period"
                 >
                   {periodOptions.map((option) => (
@@ -994,7 +1088,7 @@ function Dashboard() {
                         setRangeStartDraft(null);
                         setPeriod(option);
                       }}
-                      className={`rounded px-3 py-1.5 text-xs font-semibold transition ${period === option ? "bg-[#176044] text-white" : "text-[#64766d] hover:text-[#176044]"}`}
+                      className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${period === option ? "bg-[#176044] text-white shadow-sm" : "text-[#64766d] hover:bg-[#f1f5f1] hover:text-[#176044]"}`}
                     >
                       {option}
                     </button>
@@ -1009,7 +1103,7 @@ function Dashboard() {
                     className={`inline-flex h-10 items-center gap-2 rounded-md border px-3 text-xs font-semibold transition ${
                       period === "Custom range"
                         ? "border-[#176044] bg-[#e4f0e5] text-[#176044]"
-                        : "border-[#d7e1da] bg-white text-[#52685d] hover:border-[#397354]"
+                        : "border-[#d7e1da] bg-white text-[#52685d] shadow-sm hover:border-[#397354]"
                     }`}
                   >
                     <FiCalendar size={15} aria-hidden="true" />
@@ -1158,9 +1252,11 @@ function Dashboard() {
                   )}
                 </div>
               </div>
-              <p
+              <button
+                type="button"
                 onClick={handleLogout}
-                className="hidden h-9 items-center gap-2 rounded-md border border-[#d7e1da] bg-white px-3 text-sm font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044] sm:inline-flex"
+                disabled={logoutLoading}
+                className="hidden h-10 items-center gap-2 rounded-xl border border-[#d7e1da] bg-white px-4 text-sm font-semibold text-[#52685d] shadow-sm transition hover:border-[#397354] hover:text-[#176044] disabled:cursor-not-allowed disabled:opacity-60 sm:inline-flex"
               >
                 {logoutLoading ? (
                   <LuLoaderCircle className="animate-spin text-2xl" />
@@ -1170,13 +1266,13 @@ function Dashboard() {
                     Log out
                   </>
                 )}
-              </p>
+              </button>
             </div>
           </header>
 
           <section
-            aria-label="Rokar balance"
-            className="mb-3 grid gap-3 sm:grid-cols-3"
+            aria-label="Account balances"
+            className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
           >
             {[
               {
@@ -1197,13 +1293,34 @@ function Dashboard() {
                 tone: "text-[#526b83]",
                 cardTone: "bg-white",
               },
+              {
+                label: "Total AEPS",
+                amount: totalAeps,
+                tone: "text-[#18392f]",
+                cardTone: "bg-[#e4f0e5]",
+              },
+              {
+                label: "AEPS Cash",
+                amount: aepsCash,
+                tone: "text-[#397354]",
+                cardTone: "bg-white",
+              },
+              {
+                label: "AEPS Online",
+                amount: aepsOnline,
+                tone: "text-[#526b83]",
+                cardTone: "bg-white",
+              },
             ].map(({ label, amount, tone, cardTone }) => (
               <article
                 key={label}
-                className={`rounded-md border border-[#dce6de] p-4 sm:p-5 ${cardTone}`}
+                className={`group relative overflow-hidden rounded-2xl border border-[#dce6de] p-4 shadow-[0_6px_22px_rgba(24,57,47,0.04)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(24,57,47,0.08)] sm:p-5 ${cardTone}`}
               >
-                <p className="text-sm font-semibold text-[#64766d]">{label}</p>
-                <p className={`mt-2 text-2xl font-bold ${tone}`}>
+                <span className="absolute right-0 top-0 h-16 w-16 -translate-y-1/3 translate-x-1/3 rounded-full bg-[#397354]/[0.06] transition group-hover:scale-125" />
+                <p className="relative text-xs font-bold uppercase tracking-[0.12em] text-[#718078]">
+                  {label}
+                </p>
+                <p className={`relative mt-3 text-2xl font-bold tracking-tight sm:text-[1.7rem] ${tone}`}>
                   {formatMoney(amount)}
                 </p>
               </article>
@@ -1212,26 +1329,26 @@ function Dashboard() {
 
           <section
             aria-label="Sales and expense summary"
-            className="grid gap-3 md:grid-cols-2"
+            className="grid gap-4 md:grid-cols-2"
           >
             {metricCards.map(
               ({ id, label, amount, detail, payments, icon: Icon, tone }) => (
                 <article
                   id={id}
                   key={id}
-                  className="rounded-md border border-[#dce6de] bg-white p-4 sm:p-5"
+                  className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] transition hover:shadow-[0_12px_28px_rgba(24,57,47,0.08)] sm:p-6"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-[#64766d]">
                       {label}
                     </p>
                     <span
-                      className={`flex h-8 w-8 items-center justify-center rounded-md ${tone}`}
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}
                     >
                       <Icon size={17} aria-hidden="true" />
                     </span>
                   </div>
-                  <p className="mt-3 text-3xl font-semibold text-[#18392f]">
+                  <p className="mt-4 text-3xl font-bold tracking-tight text-[#18392f]">
                     {formatMoney(amount)}
                   </p>
                   <p className="mt-1 text-xs text-[#839188]">{detail}</p>
@@ -1252,10 +1369,10 @@ function Dashboard() {
             )}
           </section>
 
-          <section className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_0.85fr]">
+          <section className="mt-5 grid gap-4 xl:grid-cols-[1.55fr_0.85fr]">
             <article
               id="cashflow"
-              className="rounded-md border border-[#dce6de] bg-white p-4 sm:p-6"
+              className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -1281,11 +1398,11 @@ function Dashboard() {
               <div className="mt-7 grid grid-cols-7 gap-2 sm:gap-4">
                 {weeklySummary.map((day) => (
                   <div key={day.dateKey} className="min-w-0 text-center">
-                    <div className="flex h-32 items-end justify-center gap-1 border-b border-[#e8eee8] sm:gap-1.5">
+                    <div className="flex h-36 items-end justify-center gap-1 border-b border-[#e8eee8] sm:gap-1.5">
                       <div
                         title={`Sales ${formatMoney(day.sales)}`}
                         aria-label={`${day.label}: sales ${formatMoney(day.sales)}`}
-                        className="w-2.5 rounded-t-sm bg-[#397354] sm:w-4"
+                        className="w-2.5 rounded-t-md bg-[#397354] shadow-[0_2px_6px_rgba(57,115,84,0.18)] sm:w-4"
                         style={{
                           height: `${Math.max(day.sales ? 5 : 0, (day.sales / maxChartValue) * 112)}px`,
                         }}
@@ -1293,7 +1410,7 @@ function Dashboard() {
                       <div
                         title={`Expenses ${formatMoney(day.expenses)}`}
                         aria-label={`${day.label}: expenses ${formatMoney(day.expenses)}`}
-                        className="w-2.5 rounded-t-sm bg-[#d9a293] sm:w-4"
+                        className="w-2.5 rounded-t-md bg-[#d9a293] shadow-[0_2px_6px_rgba(217,162,147,0.18)] sm:w-4"
                         style={{
                           height: `${Math.max(day.expenses ? 5 : 0, (day.expenses / maxChartValue) * 112)}px`,
                         }}
@@ -1331,7 +1448,7 @@ function Dashboard() {
               </div>
             </article>
 
-            <article className="rounded-md border border-[#dce6de] bg-white p-4 sm:p-6">
+            <article className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-serif text-xl font-semibold text-[#18392f]">
@@ -1346,7 +1463,7 @@ function Dashboard() {
                     type="button"
                     aria-label="Close entry form"
                     onClick={() => setIsEntryFormOpen(false)}
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-[#718078] hover:bg-[#edf3ef]"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#718078] transition hover:bg-[#edf3ef]"
                   >
                     <FiX size={17} aria-hidden="true" />
                   </button>
@@ -1355,25 +1472,25 @@ function Dashboard() {
 
               {!isEntryFormOpen ? (
                 <>
-                  <div className="mt-5 grid grid-cols-3 gap-2">
+                  <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <button
                       type="button"
                       onClick={() => openEntryForm("sale")}
-                      className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#176044] px-3 text-xs font-bold text-white transition hover:bg-[#124d36]"
+                      className="flex h-12 items-center justify-center gap-2 rounded-xl bg-[#176044] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#124d36] hover:shadow-md"
                     >
                       <FiPlus size={16} aria-hidden="true" /> Record sale
                     </button>
                     <button
                       type="button"
                       onClick={() => openEntryForm("expense")}
-                      className="flex h-11 items-center justify-center gap-2 rounded-md border border-[#d7e1da] bg-white px-3 text-xs font-bold text-[#52685d] transition hover:border-[#d9a293] hover:text-[#a05c48]"
+                      className="flex h-12 items-center justify-center gap-2 rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-bold text-[#52685d] transition hover:border-[#d9a293] hover:bg-[#fdf8f6] hover:text-[#a05c48]"
                     >
                       <FiPlus size={16} aria-hidden="true" /> Add expense
                     </button>
                     <button
                       type="button"
                       onClick={() => openEntryForm("AEPS")}
-                      className="flex h-11 items-center justify-center gap-2 rounded-md border border-[#d7e1da] bg-white px-3 text-xs font-bold text-[#52685d] transition hover:border-[#d9a293] hover:text-[#a05c48]"
+                      className="flex h-12 items-center justify-center gap-2 rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-bold text-[#52685d] transition hover:border-[#a9c59e] hover:bg-[#f4f8f3] hover:text-[#176044]"
                     >
                       <FiPlus size={16} aria-hidden="true" /> AEPS
                     </button>
@@ -1388,10 +1505,10 @@ function Dashboard() {
                       handleCreateSaleRecord(e, entryType);
                     }
                   }}
-                  className="mt-4 space-y-3"
+                  className="mt-5 space-y-4 rounded-2xl border border-[#e8eee8] bg-[#f9fbf9] p-4"
                 >
                   <div
-                    className="grid grid-cols-3 rounded-md border border-[#d7e1da] p-1"
+                    className="grid grid-cols-3 rounded-xl border border-[#d7e1da] bg-white p-1"
                     aria-label="Entry type"
                   >
                     {["sale", "expense", "AEPS"].map((type) => (
@@ -1403,7 +1520,7 @@ function Dashboard() {
                           setFormError({});
                           handleEntryTypeChange(type);
                         }}
-                        className={`h-8 rounded text-xs font-bold capitalize ${
+                        className={`h-9 rounded-lg text-xs font-bold capitalize transition ${
                           entryType === type
                             ? {
                                 sale: "bg-[#176044] text-white",
@@ -1433,7 +1550,7 @@ function Dashboard() {
                           })
                         }
                         placeholder="e.g. Counter sales"
-                        className="mt-1.5 h-10 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+                        className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                       />
                       {formError.description && (
                         <span className="mt-1 block text-xs text-red-600">
@@ -1457,7 +1574,7 @@ function Dashboard() {
                           })
                         }
                         placeholder="e.g. Khushi Rawat"
-                        className="mt-1.5 h-10 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+                        className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                       />
                       {formError.name && (
                         <span className="mt-1 block text-xs text-red-600">
@@ -1482,7 +1599,7 @@ function Dashboard() {
                           })
                         }
                         placeholder="9834-7366-1887"
-                        className="mt-1.5 h-10 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+                        className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                       />
                       {formError.adharNumber && (
                         <span className="mt-1 block text-xs text-red-600">
@@ -1509,7 +1626,7 @@ function Dashboard() {
                               category: event.target.value,
                             })
                           }
-                          className="mt-1.5 h-10 w-full rounded-md border border-[#d7e1da] bg-white px-2 text-xs font-normal text-[#18392f] outline-none focus:border-[#397354]"
+                          className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-normal text-[#18392f] outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                         >
                           {(entryType === "sale"
                             ? saleCategories
@@ -1540,7 +1657,7 @@ function Dashboard() {
                               type: event.target.value,
                             })
                           }
-                          className="mt-1.5 h-10 w-full rounded-md border border-[#d7e1da] bg-white px-2 text-xs font-normal text-[#18392f] outline-none focus:border-[#397354]"
+                          className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-normal text-[#18392f] outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                         >
                           {typeOptions.map((payment) => (
                             <option key={payment}>{payment}</option>
@@ -1567,7 +1684,7 @@ function Dashboard() {
                               payment: event.target.value,
                             })
                           }
-                          className="mt-1.5 h-10 w-full rounded-md border border-[#d7e1da] bg-white px-2 text-xs font-normal text-[#18392f] outline-none focus:border-[#397354]"
+                          className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-normal text-[#18392f] outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                         >
                           {paymentOptions.map((payment) => (
                             <option key={payment}>{payment}</option>
@@ -1598,7 +1715,7 @@ function Dashboard() {
                         })
                       }
                       placeholder="0"
-                      className="mt-1.5 h-10 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+                      className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                     />
                     {formError.amount && (
                       <span className="mt-1 block text-xs text-red-600">
@@ -1608,7 +1725,7 @@ function Dashboard() {
                   </label>
                   <button
                     type="submit"
-                    className={`h-10 w-full items-center justify-center flex  rounded-md text-sm font-bold text-white transition ${
+                    className={`flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white shadow-sm transition hover:shadow-md ${
                       entryType
                         ? {
                             sale: "bg-[#176044] text-white",
@@ -1644,7 +1761,7 @@ function Dashboard() {
 
           <section
             id="transactions"
-            className="mt-5 rounded-md border border-[#dce6de] bg-white p-4 sm:p-6"
+            className="mt-5 rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1656,7 +1773,7 @@ function Dashboard() {
                 </p>
               </div>
               <div
-                className="inline-flex w-fit rounded-md border border-[#d7e1da] bg-white p-1"
+                className="inline-flex w-fit rounded-xl border border-[#d7e1da] bg-[#f7faf8] p-1"
                 aria-label="Filter transactions"
               >
                 {transactionFilters.map(({ label, value }) => (
@@ -1665,7 +1782,7 @@ function Dashboard() {
                     type="button"
                     aria-pressed={transactionFilter === value}
                     onClick={() => setTransactionFilter(value)}
-                    className={`rounded px-3 py-1.5 text-xs font-semibold transition ${transactionFilter === value ? "bg-[#e4f0e5] text-[#176044]" : "text-[#718078] hover:text-[#176044]"}`}
+                    className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${transactionFilter === value ? "bg-white text-[#176044] shadow-sm" : "text-[#718078] hover:text-[#176044]"}`}
                   >
                     {label}
                   </button>
@@ -1689,7 +1806,7 @@ function Dashboard() {
                   .map((transaction) => (
                     <div
                       key={transaction._id}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-[#e8eee8] py-3 sm:grid-cols-[minmax(0,1.6fr)_1fr_0.8fr_auto] sm:gap-4"
+                      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-[#e8eee8] py-4 transition-colors hover:bg-[#fbfdfb] sm:grid-cols-[minmax(0,1.6fr)_1fr_0.8fr_auto_auto] sm:gap-4"
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <span
@@ -1723,6 +1840,30 @@ function Dashboard() {
                         {transaction.type === "sale" ? "+" : "−"}
                         {formatMoney(transaction.amount)}
                       </span>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${transaction.type} record`}
+                        title="Delete record"
+                        disabled={Boolean(deletingTransactionKey)}
+                        onClick={() =>
+                          setDeleteConfirmation({
+                            kind: "record",
+                            transaction,
+                          })
+                        }
+                        className="flex h-9 w-9 items-center justify-center rounded-md text-[#a05c48] transition hover:bg-[#f8e9e4] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingTransactionKey ===
+                        `record:${transaction._id}` ? (
+                          <LuLoaderCircle
+                            className="animate-spin"
+                            size={17}
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <FiTrash2 size={16} aria-hidden="true" />
+                        )}
+                      </button>
                     </div>
                   ))
               ) : (
@@ -1734,44 +1875,8 @@ function Dashboard() {
           </section>
 
           <section
-            aria-label="AEPS balance"
-            className="mt-5 grid gap-3 sm:grid-cols-3"
-          >
-            {[
-              {
-                label: "Total AEPS",
-                amount: totalAeps,
-                tone: "text-[#18392f]",
-                cardTone: "bg-[#e4f0e5]",
-              },
-              {
-                label: "AEPS Cash",
-                amount: aepsCash,
-                tone: "text-[#397354]",
-                cardTone: "bg-white",
-              },
-              {
-                label: "AEPS Online",
-                amount: aepsOnline,
-                tone: "text-[#526b83]",
-                cardTone: "bg-white",
-              },
-            ].map(({ label, amount, tone, cardTone }) => (
-              <article
-                key={label}
-                className={`rounded-md border border-[#dce6de] p-4 sm:p-5 ${cardTone}`}
-              >
-                <p className="text-sm font-semibold text-[#64766d]">{label}</p>
-                <p className={`mt-2 text-2xl font-bold ${tone}`}>
-                  {formatMoney(amount)}
-                </p>
-              </article>
-            ))}
-          </section>
-
-          <section
             id="aeps-transactions"
-            className="mt-5 rounded-md border border-[#dce6de] bg-white p-4 sm:p-6"
+            className="mt-5 rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1792,7 +1897,7 @@ function Dashboard() {
                 aepsRecords.map((transaction) => (
                   <div
                     key={transaction._id}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-[#e8eee8] py-3 sm:grid-cols-[minmax(0,1.6fr)_1fr_0.8fr_auto] sm:gap-4"
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-[#e8eee8] py-4 transition-colors hover:bg-[#fbfdfb] sm:grid-cols-[minmax(0,1.6fr)_1fr_0.8fr_auto_auto] sm:gap-4"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#e9eef5] text-[#526b83]">
@@ -1816,6 +1921,30 @@ function Dashboard() {
                     <span className="text-right text-sm font-bold text-[#526b83]">
                       {formatMoney(transaction.amount)}
                     </span>
+                    <button
+                      type="button"
+                      aria-label={`Delete AEPS ${transaction.type} transaction`}
+                      title="Delete AEPS transaction"
+                      disabled={Boolean(deletingTransactionKey)}
+                      onClick={() =>
+                        setDeleteConfirmation({
+                          kind: "aeps",
+                          transaction,
+                        })
+                      }
+                      className="flex h-9 w-9 items-center justify-center rounded-md text-[#a05c48] transition hover:bg-[#f8e9e4] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {deletingTransactionKey ===
+                      `aeps:${transaction._id}` ? (
+                        <LuLoaderCircle
+                          className="animate-spin"
+                          size={17}
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <FiTrash2 size={16} aria-hidden="true" />
+                      )}
+                    </button>
                   </div>
                 ))
               ) : (
@@ -1831,13 +1960,114 @@ function Dashboard() {
           </p>
         </main>
       </div>
+      {deleteConfirmation && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#10291f]/60 p-4 backdrop-blur-[2px]">
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="deleteTransactionTitle"
+            aria-describedby="deleteTransactionDescription"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-[#e8eee8] bg-white shadow-[0_24px_80px_rgba(0,0,0,0.24)]"
+          >
+            <div className="flex items-start gap-4 p-5 sm:p-6">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f8e9e4] text-[#a05c48]">
+                <FiTrash2 size={19} aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2
+                  id="deleteTransactionTitle"
+                  className="font-serif text-xl font-semibold text-[#18392f]"
+                >
+                  Delete this{" "}
+                  {deleteConfirmation.kind === "aeps" ? "AEPS " : ""}
+                  {deleteConfirmation.transaction.type}?
+                </h2>
+                <p
+                  id="deleteTransactionDescription"
+                  className="mt-2 text-sm leading-6 text-[#64766d]"
+                >
+                  This will permanently remove the transaction and adjust the
+                  matching balance. This action cannot be undone.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Cancel deletion"
+                disabled={Boolean(deletingTransactionKey)}
+                onClick={() => setDeleteConfirmation(null)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#718078] transition hover:bg-[#edf3ef] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FiX size={17} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mx-5 mb-5 rounded-xl border border-[#e8eee8] bg-[#f7faf8] px-4 py-3 sm:mx-6">
+              <p className="truncate text-sm font-semibold text-[#29463a]">
+                {deleteConfirmation.kind === "aeps"
+                  ? deleteConfirmation.transaction.name || "AEPS transaction"
+                  : deleteConfirmation.transaction.description ||
+                    "Ledger transaction"}
+              </p>
+              <p className="mt-1 text-xs capitalize text-[#718078]">
+                {deleteConfirmation.kind === "aeps"
+                  ? "AEPS · "
+                  : ""}
+                {deleteConfirmation.transaction.type}
+                {" · "}
+                {formatMoney(deleteConfirmation.transaction.amount)}
+              </p>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-[#e8eee8] bg-[#fbfcfb] p-4 sm:flex-row sm:justify-end sm:px-6">
+              <button
+                type="button"
+                disabled={Boolean(deletingTransactionKey)}
+                onClick={() => setDeleteConfirmation(null)}
+                className="h-10 rounded-lg border border-[#d7e1da] bg-white px-4 text-sm font-semibold text-[#52685d] transition hover:bg-[#f1f5f1] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(deletingTransactionKey)}
+                onClick={() => {
+                  if (deleteConfirmation.kind === "aeps") {
+                    handleDeleteAepsTransaction(
+                      deleteConfirmation.transaction,
+                    );
+                  } else {
+                    handleDeleteRecord(deleteConfirmation.transaction);
+                  }
+                }}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#a04436] px-4 text-sm font-bold text-white transition hover:bg-[#87372d] focus:outline-none focus:ring-4 focus:ring-[#a04436]/20 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {deletingTransactionKey ? (
+                  <>
+                    <LuLoaderCircle
+                      className="animate-spin"
+                      size={16}
+                      aria-hidden="true"
+                    />
+                    Deleting…
+                  </>
+                ) : (
+                  <>
+                    <FiTrash2 size={15} aria-hidden="true" />
+                    Delete transaction
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {isProfileOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10291f]/55 p-4">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="profileDialogTitle"
-            className="w-full max-w-115 rounded-lg bg-white p-5 shadow-[0_24px_80px_rgba(0,0,0,0.2)] sm:p-7"
+            className="w-full max-w-xl rounded-3xl border border-[#e8eee8] bg-white p-5 shadow-[0_24px_80px_rgba(0,0,0,0.2)] sm:p-7"
           >
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>

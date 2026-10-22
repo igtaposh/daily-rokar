@@ -142,7 +142,7 @@ The dashboard loads the user profile and fetches ledger information from the bac
 
 The cash-flow chart separately requests the last seven days through today and does not change when the user selects another dashboard date range.
 
-When a sale or expense is created successfully, the DailyRokar updates the profile balance shown in the UI using the balances returned by the backend (or a local calculation if the response does not include them). The backend is authoritative for persisted balances.
+The dashboard stores fetched AEPS transactions in the AEPS context and refreshes them when the selected date range changes or a transaction is created or deleted. Recent sales, expenses, and AEPS transactions can be deleted; deleting an entry reverses its corresponding displayed balance change. Rokar and AEPS balance cards are shown together at the top of the dashboard. When a sale or expense is created successfully, the DailyRokar updates the profile balance shown in the UI using the balances returned by the backend (or a local calculation if the response does not include them). For AEPS transactions, withdrawals increase the AEPS online balance and deposits increase the AEPS cash balance. The backend is authoritative for persisted balances.
 
 The landing page's transaction preview is illustrative sample content; it is not live user data.
 
