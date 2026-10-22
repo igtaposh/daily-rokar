@@ -2,8 +2,8 @@ import { FiArrowRight, FiTrendingUp } from "react-icons/fi";
 import { useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.svg";
-import axiosInstance, { setAuthToken } from "../api/axiosInstance";
 import { AuthContext } from "../context/AuthContext";
+import { LuLoaderCircle } from "react-icons/lu";
 
 const transactions = [
   {
@@ -79,9 +79,8 @@ const landingFeatures = [
 
 function LandingPage() {
   const navigate = useNavigate();
-  const { token, setToken, setUser } = useContext(AuthContext);
-  const [continuingWithSession, setContinuingWithSession] = useState(false);
-  const [sessionError, setSessionError] = useState("");
+  const { token, user } = useContext(AuthContext);
+  const [sessionError, setSessionError] = useState(false);
   const formattedToday = new Intl.DateTimeFormat("en-IN", {
     weekday: "long",
     day: "numeric",
@@ -89,36 +88,15 @@ function LandingPage() {
     year: "numeric",
   }).format(new Date());
 
-  const handleAuthLink = async (event, destination) => {
-    if (!token) return;
-
-    event.preventDefault();
-    if (continuingWithSession) return;
-    setSessionError("");
-    setContinuingWithSession(true);
-
-    try {
-      const res = await axiosInstance.post("/user/refresh-token");
-      setUser(res.data.user);
-      setToken(res.data.token);
-      setAuthToken(res.data.token);
+  const handleAuthLink = async (e, destination) => {
+    setSessionError(true);
+    if (!token || !user) {
+      navigate(destination);
+    } else {
       navigate("/dashboard");
-    } catch (error) {
-      const status = error?.response?.status;
-
-      if (status === 401 || status === 403) {
-        setAuthToken(null);
-        setToken(null);
-        setUser(null);
-        navigate(destination);
-      } else {
-        setSessionError(
-          "Could not verify your saved session. Please try again.",
-        );
-      }
-    } finally {
-      setContinuingWithSession(false);
     }
+
+    e.preventDefault();
   };
 
   return (
@@ -150,31 +128,22 @@ function LandingPage() {
           <div className="flex items-center gap-4">
             <Link
               to="/login"
-              onClick={(event) => handleAuthLink(event, "/login")}
+              onClick={(e) => handleAuthLink(e, "/login")}
               className="hidden text-sm font-semibold text-[#315b46] hover:text-[#176044] sm:inline"
             >
-              {continuingWithSession ? "Checking session..." : "Sign in"}
+              Sign
             </Link>
             <Link
               to="/signup"
-              onClick={(event) => handleAuthLink(event, "/signup")}
+              onClick={(e) => handleAuthLink(e, "/signup")}
               className="inline-flex h-10 items-center gap-2 rounded-md bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36]"
             >
-              {continuingWithSession ? "Opening dashboard..." : "Get started"}
+              Get Started
               <FiArrowRight size={16} aria-hidden="true" />
             </Link>
           </div>
         </nav>
       </header>
-
-      {sessionError && (
-        <p
-          role="alert"
-          className="border-b border-[#f1d5cc] bg-[#fff8f5] px-5 py-3 text-center text-sm text-[#a05c48]"
-        >
-          {sessionError}
-        </p>
-      )}
 
       <section
         id="overview"
@@ -200,12 +169,10 @@ function LandingPage() {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 to="/signup"
-                onClick={(event) => handleAuthLink(event, "/signup")}
+                onClick={(e) => handleAuthLink(e, "/signup")}
                 className="inline-flex h-12 items-center gap-2 rounded-md bg-[#c2e3a7] px-5 text-sm font-bold text-[#123d31] transition hover:bg-white"
               >
-                {continuingWithSession
-                  ? "Opening dashboard..."
-                  : "Create your account"}
+                Create your account
                 <FiArrowRight size={17} aria-hidden="true" />
               </Link>
               <a
@@ -304,19 +271,17 @@ function LandingPage() {
           <div className="flex items-center gap-5">
             <Link
               to="/login"
-              onClick={(event) => handleAuthLink(event, "/login")}
+              onClick={(e) => handleAuthLink(e, "/login")}
               className="hover:text-[#176044]"
             >
-              {continuingWithSession ? "Checking session..." : "Sign in"}
+              Sign in
             </Link>
             <Link
               to="/signup"
-              onClick={(event) => handleAuthLink(event, "/signup")}
+              onClick={(e) => handleAuthLink(e, "/signup")}
               className="font-semibold text-[#176044] hover:underline"
             >
-              {continuingWithSession
-                ? "Opening dashboard..."
-                : "Create account"}
+              Create account
             </Link>
             <Link to="/terms" className="hover:text-[#176044]">
               Terms
@@ -324,6 +289,18 @@ function LandingPage() {
           </div>
         </div>
       </footer>
+      {sessionError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10291f]/55 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profileDialogTitle"
+            className="w-full flex justify-center items-center max-w-115 rounded-lgsm:p-7"
+          >
+            <LuLoaderCircle className="animate-spin text-3xl" />
+          </section>
+        </div>
+      )}
     </main>
   );
 }

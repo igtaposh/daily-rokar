@@ -10,7 +10,6 @@ import VerifyEmail from "./pages/VerifyEmail.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 import TermsAndConditions from "./pages/TermsAndConditions.jsx";
-import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
 import { AuthContext } from "./context/AuthContext.jsx";
 
 export default function App() {
@@ -29,16 +28,11 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            isAuthenticated ? (
-              <Dashboard />
-            ) : (
-              <Navigate to="/unauthorized" replace />
-            )
+            isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
           }
         />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/unauthorized" element={<UnauthorizedPage />} />
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
