@@ -129,9 +129,9 @@ function Dashboard() {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [passwordloading, setPasswordLoading] = useState(false);
   const [userForm, setUserForm] = useState({
-    shopName: user?.shopName,
+    shopName: user?.shopName ?? "",
     password: "",
-    name: user?.name,
+    name: user?.name ?? "",
     confirmPassword: "",
     otp: "",
   });
@@ -153,9 +153,17 @@ function Dashboard() {
     }
   };
 
-  const validateForm = () => {
+  useEffect(() => {
+    setUserForm((prev) => ({
+      ...prev,
+      shopName: user?.shopName ?? "",
+      name: user?.name ?? "",
+    }));
+  }, [user]);
+
+  const validateForm = (formType) => {
     const errors = {};
-    if (profileMode === "details") {
+    if (formType === "profile") {
       if (editableProfileFields.name) {
         if (!userForm.name) {
           errors.name = "Name is required";
@@ -178,18 +186,14 @@ function Dashboard() {
             "Shop name must be between 3 and 30 characters long";
         }
       }
-    }
-
-    if (profileMode === "verify") {
+    } else if (formType === "otp") {
       const otp = userForm.otp?.trim().replace(/\D/g, "").slice(0, 6);
       if (!otp) {
         errors.otp = "OTP is required";
       } else if (otp.length !== 6) {
         errors.otp = "Please enter a valid 6-digit OTP";
       }
-    }
-
-    if (profileMode === "new-password") {
+    } else if (formType === "password") {
       if (!userForm.password.trim()) {
         errors.password = "Please enter a password";
       } else if (userForm.password.length < 8) {
@@ -201,9 +205,7 @@ function Dashboard() {
       } else if (userForm.password !== userForm.confirmPassword) {
         errors.confirmPassword = "Passwords do not match";
       }
-    }
-
-    if (entryType === "AEPS") {
+    } else if (formType === "entry" && entryType === "AEPS") {
       if (!entryForm.amount) {
         errors.amount = "Amount is required";
       } else if (entryForm.amount <= 0 || entryForm.amount >= 10000000) {
@@ -219,8 +221,10 @@ function Dashboard() {
           errors.adharNumber = "Please enter a valid adhar number";
         }
       }
-    }
-    if (entryType === "sale" || entryType === "expense") {
+    } else if (
+      formType === "entry" &&
+      (entryType === "sale" || entryType === "expense")
+    ) {
       if (!entryForm.description?.trim()) {
         errors.description = "Description is required";
       } else if (
@@ -431,7 +435,7 @@ function Dashboard() {
     1,
     ...weeklySummary.flatMap((day) => [day.sales, day.expenses]),
   );
-  const profileInitials = user?.name
+  const profileInitials = (user?.name ?? "")
     .trim()
     .split(/\s+/)
     .map((part) => part[0])
@@ -476,9 +480,6 @@ function Dashboard() {
   const handleSentOtp = async () => {
     setMessage({ type: "", text: "" });
     setPasswordLoading(true);
-    if (!validateForm()) {
-      return;
-    }
 
     try {
       const res = await axiosInstance.post("/user/sent-otp", {
@@ -530,7 +531,7 @@ function Dashboard() {
     e.preventDefault();
     setMessage({ type: "", text: "" });
 
-    if (!validateForm()) {
+    if (!validateForm("otp")) {
       return;
     }
     setLoading(true);
@@ -547,9 +548,7 @@ function Dashboard() {
           text: "OTP verified successfully",
         });
 
-        setTimeout(() => {
-          setProfileMode("new-password");
-        }, 750);
+        setProfileMode("new-password");
       }
     } catch (err) {
       console.log(err);
@@ -560,6 +559,7 @@ function Dashboard() {
           "Otp verification failed. Please try again.",
       });
     } finally {
+      setUserForm((prev) => ({ ...prev, otp: "" }));
       setLoading(false);
     }
   };
@@ -568,7 +568,7 @@ function Dashboard() {
     e.preventDefault();
     setMessage({ type: "", text: "" });
 
-    if (!validateForm()) {
+    if (!validateForm("password")) {
       return;
     }
     setLoading(true);
@@ -585,9 +585,8 @@ function Dashboard() {
           text: "Password changed.",
         });
 
-        setTimeout(() => {
-          setProfileMode("complete");
-        }, 750);
+        setMessage({ type: "", text: "" });
+        setProfileMode("complete");
       }
     } catch (err) {
       console.log(err);
@@ -598,11 +597,16 @@ function Dashboard() {
           "Changing password failed. Please try again.",
       });
     } finally {
+      setUserForm((prev) => ({
+        ...prev,
+        password: "",
+        confirmPassword: "",
+      }));
       setLoading(false);
     }
   };
-  const handleSaveProfile = async (event) => {
-    event.preventDefault();
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
     setMessage({ type: "", text: "" });
 
     if (!editableProfileFields.name && !editableProfileFields.shopName) {
@@ -613,7 +617,7 @@ function Dashboard() {
       return;
     }
 
-    if (!validateForm()) {
+    if (!validateForm("profile")) {
       return;
     }
 
@@ -629,12 +633,15 @@ function Dashboard() {
       const res = await axiosInstance.patch("/user/update", profileUpdates);
 
       if (res?.status === 200) {
-        setMessage({
-          type: "success",
-          text: "Account details updated successfully.",
-        });
+        setIsProfileOpen(false);
         setEditableProfileFields({ shopName: false, name: false });
+        setUserForm((prev) => ({
+          ...prev,
+          name: res.data.user.name,
+          shopName: res.data.user.shopName,
+        }));
         setUser({
+          ...user,
           name: res.data.user.name,
           email: res.data.user.email,
           shopName: res.data.user.shopName,
@@ -711,7 +718,7 @@ function Dashboard() {
       type: "",
       text: "",
     });
-    if (!validateForm()) {
+    if (!validateForm("entry")) {
       return;
     }
 
@@ -759,7 +766,7 @@ function Dashboard() {
       type: "",
       text: "",
     });
-    if (!validateForm()) {
+    if (!validateForm("entry")) {
       return;
     }
 
@@ -1869,42 +1876,73 @@ function Dashboard() {
 
             {profileMode === "details" && (
               <>
+                <div className="mb-5 rounded-xl border border-[#e6eee8] bg-[#f7faf8] p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#397354]">
+                    Profile details
+                  </p>
+                  <p className="mt-1 text-sm text-[#64766d]">
+                    Update your business profile and account security.
+                  </p>
+                </div>
+
                 <form onSubmit={handleSaveProfile} className="space-y-4">
-                  <div className="flex items-end gap-2">
-                    <label
-                      className="block min-w-0 flex-1 text-sm font-semibold text-[#29463a]"
-                      htmlFor="shopName"
-                    >
-                      Shop name
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-[#e6eee8] bg-[#f9fbfa] p-3.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <label
+                          className="text-sm font-semibold text-[#29463a]"
+                          htmlFor="shopName"
+                        >
+                          Shop name
+                        </label>
+                        <button
+                          type="button"
+                          aria-label="Edit shop name"
+                          onClick={() =>
+                            setEditableProfileFields((fields) => ({
+                              ...fields,
+                              shopName: !fields.shopName,
+                            }))
+                          }
+                          className="inline-flex items-center gap-1 rounded-full border border-[#d7e1da] px-2.5 py-1.5 text-xs font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
+                        >
+                          {editableProfileFields.shopName ? "Cancel" : "Edit"}
+                          <LuPencil size={12} aria-hidden="true" />
+                        </button>
+                      </div>
                       <input
                         id="shopName"
                         disabled={!editableProfileFields.shopName}
                         name="shopName"
                         value={userForm.shopName}
                         onChange={handleInputChange}
-                        className={`${!editableProfileFields.shopName ? "bg-gray-200" : ""} mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10`}
+                        className={`${!editableProfileFields.shopName ? "cursor-not-allowed bg-[#edf2ef] text-[#718078]" : "bg-white text-[#18392f]"} mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10`}
                       />
-                    </label>
-                    <button
-                      type="button"
-                      aria-label="Edit shop name"
-                      onClick={() =>
-                        setEditableProfileFields((fields) => ({
-                          ...fields,
-                          shopName: !editableProfileFields.shopName,
-                        }))
-                      }
-                      className="mb-0 flex h-11 shrink-0 items-center gap-1 rounded-md border border-[#d7e1da] px-3 text-sm font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
-                    >
-                      Edit <LuPencil size={14} aria-hidden="true" />
-                    </button>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <label
-                      className="block min-w-0 flex-1 text-sm font-semibold text-[#29463a]"
-                      htmlFor="profileFullName"
-                    >
-                      Full name
+                    </div>
+
+                    <div className="rounded-xl border border-[#e6eee8] bg-[#f9fbfa] p-3.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <label
+                          className="text-sm font-semibold text-[#29463a]"
+                          htmlFor="profileFullName"
+                        >
+                          Full name
+                        </label>
+                        <button
+                          type="button"
+                          aria-label="Edit full name"
+                          onClick={() =>
+                            setEditableProfileFields((fields) => ({
+                              ...fields,
+                              name: !fields.name,
+                            }))
+                          }
+                          className="inline-flex items-center gap-1 rounded-full border border-[#d7e1da] px-2.5 py-1.5 text-xs font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
+                        >
+                          {editableProfileFields.name ? "Cancel" : "Edit"}
+                          <LuPencil size={12} aria-hidden="true" />
+                        </button>
+                      </div>
                       <input
                         disabled={!editableProfileFields.name}
                         id="profileFullName"
@@ -1912,23 +1950,11 @@ function Dashboard() {
                         autoComplete="name"
                         onChange={handleInputChange}
                         value={userForm.name}
-                        className={`${!editableProfileFields.name ? "bg-gray-200" : ""} mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10`}
+                        className={`${!editableProfileFields.name ? "cursor-not-allowed bg-[#edf2ef] text-[#718078]" : "bg-white text-[#18392f]"} mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10`}
                       />
-                    </label>
-                    <button
-                      type="button"
-                      aria-label="Edit full name"
-                      onClick={() =>
-                        setEditableProfileFields((fields) => ({
-                          ...fields,
-                          name: !editableProfileFields.name,
-                        }))
-                      }
-                      className="mb-0 flex h-11 shrink-0 items-center gap-1 rounded-md border border-[#d7e1da] px-3 text-sm font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
-                    >
-                      Edit <LuPencil size={14} aria-hidden="true" />
-                    </button>
+                    </div>
                   </div>
+
                   {message.text && (
                     <div
                       className={`rounded-lg border px-3 py-2 text-sm ${
@@ -1940,9 +1966,10 @@ function Dashboard() {
                       {message.text}
                     </div>
                   )}
+
                   <button
                     type="submit"
-                    disabled={loading}
+                    // disabled={loading}
                     className="group mt-2 flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36] focus:outline-none focus:ring-4 focus:ring-[#176044]/20 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {loading ? (
@@ -1956,7 +1983,7 @@ function Dashboard() {
                   </button>
                 </form>
 
-                <section className="mt-5 border-t border-[#e8eee8] pt-4">
+                <section className="mt-5 rounded-xl border border-[#e8eee8] bg-[#f8faf8] p-4">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <h3 className="text-sm font-semibold text-[#29463a]">
@@ -1969,7 +1996,7 @@ function Dashboard() {
                     <button
                       type="button"
                       onClick={handleSentOtp}
-                      className="h-9 shrink-0 rounded-md border border-[#d7e1da] px-3 text-sm font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
+                      className="h-9 shrink-0 rounded-md border border-[#d7e1da] bg-white px-3 text-sm font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
                     >
                       {passwordloading ? (
                         <LuLoaderCircle className="animate-spin text-2xl" />
@@ -1981,9 +2008,10 @@ function Dashboard() {
                 </section>
 
                 <div className="mt-4 border-t border-[#e8eee8] pt-3">
-                  <p
+                  <button
+                    type="button"
                     onClick={handleLogout}
-                    className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-[#a05c48] hover:bg-[#f8e9e4]"
+                    className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-[#a05c48] transition hover:bg-[#f8e9e4]"
                   >
                     {logoutLoading ? (
                       <LuLoaderCircle className="animate-spin text-2xl" />
@@ -1993,7 +2021,7 @@ function Dashboard() {
                         Log out
                       </>
                     )}
-                  </p>
+                  </button>
                 </div>
               </>
             )}
@@ -2043,9 +2071,13 @@ function Dashboard() {
                   )}
                   <button
                     type="submit"
-                    className="h-10 w-full rounded-md bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36]"
+                    className="h-10 flex items-center justify-center w-full rounded-md bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36]"
                   >
-                    Verify email
+                    {loading ? (
+                      <LuLoaderCircle className="animate-spin text-2xl" />
+                    ) : (
+                      "Verify email"
+                    )}
                   </button>
                 </form>
                 <div className="mt-5 text-center">
@@ -2138,9 +2170,13 @@ function Dashboard() {
 
                   <button
                     type="submit"
-                    className="h-10 w-full rounded-md bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36]"
+                    className="h-10 flex items-center justify-center w-full rounded-md bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36]"
                   >
-                    Change Password
+                    {loading ? (
+                      <LuLoaderCircle className="animate-spin text-2xl" />
+                    ) : (
+                      "Change Password"
+                    )}
                   </button>
                 </form>
                 <button
