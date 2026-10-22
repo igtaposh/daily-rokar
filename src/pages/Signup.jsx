@@ -97,13 +97,11 @@ function Signup() {
           text: "Account created successfully. Please verify your email.",
         });
 
-        setTimeout(async () => {
-          localStorage.setItem("email", userForm.email);
-          await axiosInstance.post("/user/sent-otp", {
-            email: userForm.email,
-          });
-          navigate("/verify-email");
-        }, 750);
+        localStorage.setItem("email", userForm.email);
+        await axiosInstance.post("/user/sent-otp", {
+          email: userForm.email,
+        });
+        navigate("/verify-email");
       }
     } catch (err) {
       console.log(err);
@@ -328,18 +326,12 @@ function Signup() {
                 disabled={loading}
                 className="cursor-pointer group mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36] focus:outline-none focus:ring-4 focus:ring-[#176044]/20 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {loading ? (
-                  <LuLoaderCircle className="animate-spin text-2xl" />
-                ) : (
-                  <>
-                    Create Account
-                    <FiArrowRight
-                      className="transition-transform group-hover:translate-x-1"
-                      size={17}
-                      aria-hidden="true"
-                    />
-                  </>
-                )}
+                Create Account
+                <FiArrowRight
+                  className="transition-transform group-hover:translate-x-1"
+                  size={17}
+                  aria-hidden="true"
+                />
               </button>
             </form>
 
@@ -355,6 +347,18 @@ function Signup() {
           </div>
         </div>
       </section>
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10291f]/55 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profileDialogTitle"
+            className="w-full flex justify-center items-center max-w-115 rounded-lgsm:p-7"
+          >
+            <LuLoaderCircle className="animate-spin text-3xl" />
+          </section>
+        </div>
+      )}
     </main>
   );
 }

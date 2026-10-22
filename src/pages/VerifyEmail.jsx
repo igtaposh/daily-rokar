@@ -56,9 +56,7 @@ function VerifyEmail() {
           text: "OTP verified successfully",
         });
         localStorage.removeItem("email");
-        setTimeout(() => {
-          navigate("/login");
-        }, 750);
+        navigate("/login");
       }
     } catch (err) {
       console.log(err);
@@ -228,18 +226,12 @@ function VerifyEmail() {
                 type="submit"
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36] cursor-pointer"
               >
-                {loading ? (
-                  <LuLoaderCircle className="animate-spin text-2xl" />
-                ) : (
-                  <>
-                    Verify Email
-                    <FiArrowRight
-                      className="transition-transform group-hover:translate-x-1"
-                      size={17}
-                      aria-hidden="true"
-                    />
-                  </>
-                )}
+                Verify Email
+                <FiArrowRight
+                  className="transition-transform group-hover:translate-x-1"
+                  size={17}
+                  aria-hidden="true"
+                />
               </button>
             </form>
 
@@ -279,6 +271,18 @@ function VerifyEmail() {
           </div>
         </div>
       </section>
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10291f]/55 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profileDialogTitle"
+            className="w-full flex justify-center items-center max-w-115 rounded-lgsm:p-7"
+          >
+            <LuLoaderCircle className="animate-spin text-3xl" />
+          </section>
+        </div>
+      )}
     </main>
   );
 }

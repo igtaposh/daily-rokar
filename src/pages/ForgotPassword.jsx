@@ -119,9 +119,7 @@ function ForgotPassword() {
           text: "An 6 digit code has been sent to your email.",
         });
 
-        setTimeout(() => {
-          setStep("verify");
-        }, 750);
+        setStep("verify");
       }
     } catch (err) {
       console.log(err);
@@ -155,9 +153,7 @@ function ForgotPassword() {
           text: "OTP verified successfully",
         });
 
-        setTimeout(() => {
-          setStep("password");
-        }, 750);
+        setStep("password");
       }
     } catch (err) {
       console.log(err);
@@ -192,9 +188,7 @@ function ForgotPassword() {
           text: "Password changed.",
         });
 
-        setTimeout(() => {
-          setStep("complete");
-        }, 750);
+        setStep("complete");
       }
     } catch (err) {
       console.log(err);
@@ -386,18 +380,12 @@ function ForgotPassword() {
                   disabled={loading}
                   className="cursor-pointer group mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36] focus:outline-none focus:ring-4 focus:ring-[#176044]/20 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {loading ? (
-                    <LuLoaderCircle className="animate-spin text-2xl" />
-                  ) : (
-                    <>
-                      Continue to Verification
-                      <FiArrowRight
-                        className="transition-transform group-hover:translate-x-1"
-                        size={17}
-                        aria-hidden="true"
-                      />
-                    </>
-                  )}
+                  Continue to Verification
+                  <FiArrowRight
+                    className="transition-transform group-hover:translate-x-1"
+                    size={17}
+                    aria-hidden="true"
+                  />
                 </button>
               </form>
             )}
@@ -443,18 +431,12 @@ function ForgotPassword() {
                     type="submit"
                     className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36] cursor-pointer"
                   >
-                    {loading ? (
-                      <LuLoaderCircle className="animate-spin text-2xl" />
-                    ) : (
-                      <>
-                        Verify Email
-                        <FiArrowRight
-                          className="transition-transform group-hover:translate-x-1"
-                          size={17}
-                          aria-hidden="true"
-                        />
-                      </>
-                    )}
+                    Verify Email
+                    <FiArrowRight
+                      className="transition-transform group-hover:translate-x-1"
+                      size={17}
+                      aria-hidden="true"
+                    />
                   </button>
                 </form>
                 <div className="mt-5 text-center">
@@ -541,18 +523,12 @@ function ForgotPassword() {
                   type="submit"
                   className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36] cursor-pointer"
                 >
-                  {loading ? (
-                    <LuLoaderCircle className="animate-spin text-2xl" />
-                  ) : (
-                    <>
-                      Submit
-                      <FiArrowRight
-                        className="transition-transform group-hover:translate-x-1"
-                        size={17}
-                        aria-hidden="true"
-                      />
-                    </>
-                  )}
+                  Submit
+                  <FiArrowRight
+                    className="transition-transform group-hover:translate-x-1"
+                    size={17}
+                    aria-hidden="true"
+                  />
                 </button>
               </form>
             )}
@@ -592,6 +568,18 @@ function ForgotPassword() {
           </div>
         </div>
       </section>
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10291f]/55 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profileDialogTitle"
+            className="w-full flex justify-center items-center max-w-115 rounded-lgsm:p-7"
+          >
+            <LuLoaderCircle className="animate-spin text-3xl" />
+          </section>
+        </div>
+      )}
     </main>
   );
 }
