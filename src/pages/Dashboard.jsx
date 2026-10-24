@@ -1,32 +1,34 @@
 import { useContext, useEffect, useState } from "react";
 import {
-  FiArrowLeft,
   FiArrowDownRight,
   FiArrowUpRight,
-  FiBarChart2,
+  FiBookOpen,
   FiCalendar,
-  FiCheck,
   FiChevronLeft,
   FiChevronRight,
   FiCreditCard,
   FiEdit2,
-  FiGrid,
-  FiList,
+  FiFileText,
   FiLogOut,
   FiPlus,
-  FiSave,
   FiUser,
   FiX,
-  FiRefreshCw,
-  FiTrash2,
+  FiUsers,
 } from "react-icons/fi";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.svg";
 import { AuthContext } from "../context/AuthContext";
-import { LuLoaderCircle, LuPencil } from "react-icons/lu";
+import { LuLoaderCircle } from "react-icons/lu";
 import axiosInstance, { setAuthToken } from "../api/axiosInstance";
 import { RecordContext } from "../context/RecordContext";
 import { AepsContext } from "../context/AepsContext";
+import DashboardSummary from "../components/dashboard/DashboardSummary";
+import CashFlowChart from "../components/dashboard/CashFlowChart";
+import TransactionsSection from "../components/dashboard/TransactionsSection";
+import DeleteTransactionPopup from "../components/dashboard/DeleteTransactionPopup";
+import ProfilePopup from "../components/dashboard/ProfilePopup";
+import Popup from "../components/dashboard/Popup";
+import AepsLedgerPage from "../components/dashboard/AepsLedgerPage";
 const getDateKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
@@ -52,16 +54,14 @@ const getPeriodDateRange = (period, selectedStartDate, selectedEndDate) => {
 };
 
 const navigationItems = [
-  { label: "Overview", href: "#overview", icon: FiGrid },
-  { label: "Sales", href: "#sales", icon: FiArrowUpRight },
-  { label: "Expenses", href: "#expenses", icon: FiArrowDownRight },
-  { label: "Transactions", href: "#transactions", icon: FiList },
-  { label: "Cash flow", href: "#cashflow", icon: FiBarChart2 },
+  { id: "shop", label: "Shop Ledger", icon: FiBookOpen },
+  { id: "aeps", label: "AEPS Transactions", icon: FiCreditCard },
+  { id: "customers", label: "Customer Ledger", icon: FiUsers },
+  { id: "billing", label: "Billing", icon: FiFileText },
 ];
 
 const periodOptions = ["Today", "Last 7 days", "This month"];
 const paymentOptions = ["Cash", "Online"];
-const typeOptions = ["Withdrawal", "Deposit"];
 const saleCategories = ["Retail sales", "Online sales", "Other"];
 const expenseCategories = [
   "Stock purchase",
@@ -71,12 +71,6 @@ const expenseCategories = [
   "Packaging",
   "Other expense",
 ];
-const transactionFilters = [
-  { label: "All", value: "all" },
-  { label: "Sales", value: "sale" },
-  { label: "Expenses", value: "expense" },
-];
-
 const formatMoney = (amount) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -98,6 +92,7 @@ function Dashboard() {
   const { transactions, setTransactions } = useContext(AepsContext);
   const navigate = useNavigate();
   const [weeklyRecords, setWeeklyRecords] = useState([]);
+  const [activePage, setActivePage] = useState("shop");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profileMode, setProfileMode] = useState("details");
   const [secondsUntilResend, setSecondsUntilResend] = useState(60);
@@ -391,7 +386,6 @@ function Dashboard() {
   const countdownText = `${String(Math.floor(secondsUntilResend / 60)).padStart(2, "0")}:${String(secondsUntilResend % 60).padStart(2, "0")}`;
 
   const todayKey = getDateKey();
-  const aepsRecords = transactions;
   const periodSales = records
     .filter((transaction) => transaction.type === "sale")
     .reduce((total, transaction) => total + transaction.amount, 0);
@@ -928,6 +922,14 @@ function Dashboard() {
     return dateKey;
   };
 
+  const handlePageChange = (pageId) => {
+    setActivePage(pageId);
+    setEntryType(pageId === "aeps" ? "AEPS" : "sale");
+    setIsEntryFormOpen(false);
+    setFormError({});
+    setMessage({ type: "", text: "" });
+  };
+
   const sidebar = (
     <>
       <Link
@@ -940,23 +942,29 @@ function Dashboard() {
         <span className="text-lg font-bold">DailyRokar</span>
       </Link>
       <nav aria-label="Dashboard" className="space-y-1">
-        {navigationItems.map(({ label, href, icon: Icon }, index) => (
-          <a
-            key={label}
-            href={href}
-            className={`flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-medium transition ${
-              index === 0
-                ? "bg-white/12 text-white shadow-sm"
-                : "text-white/70 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            <Icon size={17} aria-hidden="true" />
-            {label}
-            {index === 0 && (
-              <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#c2e3a7]" />
-            )}
-          </a>
-        ))}
+        {navigationItems.map(({ id, label, icon: Icon }) => {
+          const isActive = activePage === id;
+
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => handlePageChange(id)}
+              className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-sm font-medium transition ${
+                isActive
+                  ? "bg-white/12 text-white shadow-sm"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <Icon size={17} aria-hidden="true" />
+              {label}
+              {isActive && (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#c2e3a7]" />
+              )}
+            </button>
+          );
+        })}
       </nav>
     </>
   );
@@ -984,9 +992,26 @@ function Dashboard() {
   const rokarCash = Number(user?.rokar || 0);
   const rokarOnline = Number(user?.rokarOnline || 0);
   const totalRokar = rokarCash + rokarOnline;
-  const aepsCash = Number(user?.aeps || 0);
-  const aepsOnline = Number(user?.aepsOnline || 0);
-  const totalAeps = aepsCash + aepsOnline;
+  const balanceCards = [
+    {
+      label: "Total Rokar",
+      amount: totalRokar,
+      tone: "text-[#18392f]",
+      cardTone: "bg-[#e4f0e5]",
+    },
+    {
+      label: "Rokar Cash",
+      amount: rokarCash,
+      tone: "text-[#397354]",
+      cardTone: "bg-white",
+    },
+    {
+      label: "Rokar Online",
+      amount: rokarOnline,
+      tone: "text-[#526b83]",
+      cardTone: "bg-white",
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-[#edf2ed] font-[Manrope,sans-serif] text-[#18392f]">
@@ -1043,15 +1068,21 @@ function Dashboard() {
             aria-label="Dashboard sections"
             className="mb-6 flex gap-1.5 overflow-x-auto rounded-2xl border border-[#dce6de] bg-white p-1.5 shadow-sm lg:hidden"
           >
-            {navigationItems.map(({ label, href, icon: Icon }) => (
-              <a
-                key={label}
-                href={href}
-                className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold text-[#64766d] transition hover:bg-[#e4f0e5] hover:text-[#176044]"
+            {navigationItems.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={activePage === id ? "page" : undefined}
+                onClick={() => handlePageChange(id)}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
+                  activePage === id
+                    ? "bg-[#e4f0e5] text-[#176044]"
+                    : "text-[#64766d] hover:bg-[#e4f0e5] hover:text-[#176044]"
+                }`}
               >
                 <Icon size={15} aria-hidden="true" />
                 {label}
-              </a>
+              </button>
             ))}
           </nav>
 
@@ -1064,14 +1095,25 @@ function Dashboard() {
                 {formattedToday}
               </p>
               <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-[#18392f] sm:text-4xl">
-                Shop overview
+                {activePage === "shop"
+                  ? "Shop overview"
+                  : activePage === "aeps"
+                    ? "AEPS transactions"
+                    : navigationItems.find((item) => item.id === activePage)
+                        ?.label}
               </h1>
               <p className="mt-2 text-sm text-[#64766d]">
-                Track what came in, what went out, and what remains.
+                {activePage === "shop"
+                  ? "Track what came in, what went out, and what remains."
+                  : activePage === "aeps"
+                    ? "Manage your AEPS balances and transactions."
+                    : "This feature is coming soon."}
               </p>
-              <p className="mt-1.5 text-xs text-[#839188]">
-                Live records for your selected date range.
-              </p>
+              {activePage !== "customers" && activePage !== "billing" && (
+                <p className="mt-1.5 text-xs text-[#839188]">
+                  Live records for your selected date range.
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
               <div className="flex flex-wrap items-center gap-2">
@@ -1270,183 +1312,20 @@ function Dashboard() {
             </div>
           </header>
 
-          <section
-            aria-label="Account balances"
-            className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-          >
-            {[
-              {
-                label: "Total Rokar",
-                amount: totalRokar,
-                tone: "text-[#18392f]",
-                cardTone: "bg-[#e4f0e5]",
-              },
-              {
-                label: "Rokar Cash",
-                amount: rokarCash,
-                tone: "text-[#397354]",
-                cardTone: "bg-white",
-              },
-              {
-                label: "Rokar Online",
-                amount: rokarOnline,
-                tone: "text-[#526b83]",
-                cardTone: "bg-white",
-              },
-              {
-                label: "Total AEPS",
-                amount: totalAeps,
-                tone: "text-[#18392f]",
-                cardTone: "bg-[#e4f0e5]",
-              },
-              {
-                label: "AEPS Cash",
-                amount: aepsCash,
-                tone: "text-[#397354]",
-                cardTone: "bg-white",
-              },
-              {
-                label: "AEPS Online",
-                amount: aepsOnline,
-                tone: "text-[#526b83]",
-                cardTone: "bg-white",
-              },
-            ].map(({ label, amount, tone, cardTone }) => (
-              <article
-                key={label}
-                className={`group relative overflow-hidden rounded-2xl border border-[#dce6de] p-4 shadow-[0_6px_22px_rgba(24,57,47,0.04)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(24,57,47,0.08)] sm:p-5 ${cardTone}`}
-              >
-                <span className="absolute right-0 top-0 h-16 w-16 -translate-y-1/3 translate-x-1/3 rounded-full bg-[#397354]/[0.06] transition group-hover:scale-125" />
-                <p className="relative text-xs font-bold uppercase tracking-[0.12em] text-[#718078]">
-                  {label}
-                </p>
-                <p className={`relative mt-3 text-2xl font-bold tracking-tight sm:text-[1.7rem] ${tone}`}>
-                  {formatMoney(amount)}
-                </p>
-              </article>
-            ))}
-          </section>
-
-          <section
-            aria-label="Sales and expense summary"
-            className="grid gap-4 md:grid-cols-2"
-          >
-            {metricCards.map(
-              ({ id, label, amount, detail, payments, icon: Icon, tone }) => (
-                <article
-                  id={id}
-                  key={id}
-                  className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] transition hover:shadow-[0_12px_28px_rgba(24,57,47,0.08)] sm:p-6"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-[#64766d]">
-                      {label}
-                    </p>
-                    <span
-                      className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}
-                    >
-                      <Icon size={17} aria-hidden="true" />
-                    </span>
-                  </div>
-                  <p className="mt-4 text-3xl font-bold tracking-tight text-[#18392f]">
-                    {formatMoney(amount)}
-                  </p>
-                  <p className="mt-1 text-xs text-[#839188]">{detail}</p>
-                  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#e8eee8] pt-3">
-                    {payments.map(({ payment, amount: paymentAmount }) => (
-                      <div key={payment}>
-                        <p className="text-xs font-medium text-[#839188]">
-                          {payment}
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-[#29463a]">
-                          {formatMoney(paymentAmount)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              ),
-            )}
-          </section>
+          {activePage === "shop" ? (
+            <>
+              <DashboardSummary
+                balanceCards={balanceCards}
+                metricCards={metricCards}
+                formatMoney={formatMoney}
+              />
 
           <section className="mt-5 grid gap-4 xl:grid-cols-[1.55fr_0.85fr]">
-            <article
-              id="cashflow"
-              className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h2 className="font-serif text-xl font-semibold text-[#18392f]">
-                    Cash flow
-                  </h2>
-                  <p className="mt-1 text-sm text-[#718078]">
-                    Sales and expenses over the last seven days
-                  </p>
-                </div>
-                <div className="flex items-center gap-4 text-xs font-semibold text-[#64766d]">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-[#397354]" />
-                    Sales
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-[#d9a293]" />
-                    Expenses
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-7 grid grid-cols-7 gap-2 sm:gap-4">
-                {weeklySummary.map((day) => (
-                  <div key={day.dateKey} className="min-w-0 text-center">
-                    <div className="flex h-36 items-end justify-center gap-1 border-b border-[#e8eee8] sm:gap-1.5">
-                      <div
-                        title={`Sales ${formatMoney(day.sales)}`}
-                        aria-label={`${day.label}: sales ${formatMoney(day.sales)}`}
-                        className="w-2.5 rounded-t-md bg-[#397354] shadow-[0_2px_6px_rgba(57,115,84,0.18)] sm:w-4"
-                        style={{
-                          height: `${Math.max(day.sales ? 5 : 0, (day.sales / maxChartValue) * 112)}px`,
-                        }}
-                      />
-                      <div
-                        title={`Expenses ${formatMoney(day.expenses)}`}
-                        aria-label={`${day.label}: expenses ${formatMoney(day.expenses)}`}
-                        className="w-2.5 rounded-t-md bg-[#d9a293] shadow-[0_2px_6px_rgba(217,162,147,0.18)] sm:w-4"
-                        style={{
-                          height: `${Math.max(day.expenses ? 5 : 0, (day.expenses / maxChartValue) * 112)}px`,
-                        }}
-                      />
-                    </div>
-                    <p className="mt-2 text-xs font-medium text-[#718078]">
-                      {day.label}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 flex flex-wrap justify-between gap-3 border-t border-[#e8eee8] pt-4 text-sm">
-                <p className="text-[#64766d]">
-                  7-day sales{" "}
-                  <span className="ml-1 font-bold text-[#397354]">
-                    {formatMoney(
-                      weeklySummary.reduce(
-                        (total, day) => total + day.sales,
-                        0,
-                      ),
-                    )}
-                  </span>
-                </p>
-                <p className="text-[#64766d]">
-                  7-day expenses{" "}
-                  <span className="ml-1 font-bold text-[#a05c48]">
-                    {formatMoney(
-                      weeklySummary.reduce(
-                        (total, day) => total + day.expenses,
-                        0,
-                      ),
-                    )}
-                  </span>
-                </p>
-              </div>
-            </article>
+            <CashFlowChart
+              weeklySummary={weeklySummary}
+              maxChartValue={maxChartValue}
+              formatMoney={formatMoney}
+            />
 
             <article className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6">
               <div className="flex items-center justify-between gap-3">
@@ -1472,7 +1351,7 @@ function Dashboard() {
 
               {!isEntryFormOpen ? (
                 <>
-                  <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <button
                       type="button"
                       onClick={() => openEntryForm("sale")}
@@ -1487,31 +1366,20 @@ function Dashboard() {
                     >
                       <FiPlus size={16} aria-hidden="true" /> Add expense
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => openEntryForm("AEPS")}
-                      className="flex h-12 items-center justify-center gap-2 rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-bold text-[#52685d] transition hover:border-[#a9c59e] hover:bg-[#f4f8f3] hover:text-[#176044]"
-                    >
-                      <FiPlus size={16} aria-hidden="true" /> AEPS
-                    </button>
                   </div>
                 </>
               ) : (
                 <form
                   onSubmit={(e) => {
-                    if (entryType == "AEPS") {
-                      handleCreateAEPSTransaction(e);
-                    } else {
-                      handleCreateSaleRecord(e, entryType);
-                    }
+                    handleCreateSaleRecord(e, entryType);
                   }}
                   className="mt-5 space-y-4 rounded-2xl border border-[#e8eee8] bg-[#f9fbf9] p-4"
                 >
                   <div
-                    className="grid grid-cols-3 rounded-xl border border-[#d7e1da] bg-white p-1"
+                    className="grid grid-cols-2 rounded-xl border border-[#d7e1da] bg-white p-1"
                     aria-label="Entry type"
                   >
-                    {["sale", "expense", "AEPS"].map((type) => (
+                    {["sale", "expense"].map((type) => (
                       <button
                         key={type}
                         type="button"
@@ -1525,7 +1393,6 @@ function Dashboard() {
                             ? {
                                 sale: "bg-[#176044] text-white",
                                 expense: "bg-[#a05c48] text-white",
-                                AEPS: "bg-zinc-900 text-white",
                               }[type] || ""
                             : "text-[#718078]"
                         }`}
@@ -1534,169 +1401,87 @@ function Dashboard() {
                       </button>
                     ))}
                   </div>
-                  {entryType != "AEPS" ? (
-                    <label
-                      className="block text-xs font-semibold text-[#52685d]"
-                      htmlFor="entryDescription"
-                    >
-                      Description
-                      <input
-                        id="entryDescription"
-                        value={entryForm.description}
-                        onChange={(event) =>
-                          setEntryForm({
-                            ...entryForm,
-                            description: event.target.value,
-                          })
-                        }
-                        placeholder="e.g. Counter sales"
-                        className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                      />
-                      {formError.description && (
-                        <span className="mt-1 block text-xs text-red-600">
-                          {formError.description}
-                        </span>
-                      )}
-                    </label>
-                  ) : (
-                    <label
-                      className="block text-xs font-semibold text-[#52685d]"
-                      htmlFor="customerName"
-                    >
-                      Customer Name
-                      <input
-                        id="customerName"
-                        value={entryForm.name}
-                        onChange={(event) =>
-                          setEntryForm({
-                            ...entryForm,
-                            name: event.target.value,
-                          })
-                        }
-                        placeholder="e.g. Khushi Rawat"
-                        className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                      />
-                      {formError.name && (
-                        <span className="mt-1 block text-xs text-red-600">
-                          {formError.name}
-                        </span>
-                      )}
-                    </label>
-                  )}
-                  {entryType == "AEPS" && (
-                    <label
-                      className="block text-xs font-semibold text-[#52685d]"
-                      htmlFor="adharNumber"
-                    >
-                      Aadhar Number
-                      <input
-                        id="adharNumber"
-                        value={entryForm.adharNumber}
-                        onChange={(event) =>
-                          setEntryForm({
-                            ...entryForm,
-                            adharNumber: event.target.value,
-                          })
-                        }
-                        placeholder="9834-7366-1887"
-                        className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                      />
-                      {formError.adharNumber && (
-                        <span className="mt-1 block text-xs text-red-600">
-                          {formError.adharNumber}
-                        </span>
-                      )}
-                    </label>
-                  )}
-                  <div
-                    className={`grid  gap-2 ${entryType == "AEPS" ? "grid-cols-1" : "grid-cols-2 "}`}
+                  <label
+                    className="block text-xs font-semibold text-[#52685d]"
+                    htmlFor="entryDescription"
                   >
-                    {entryType != "AEPS" && (
-                      <label
-                        className="block text-xs font-semibold text-[#52685d]"
-                        htmlFor="entryCategory"
-                      >
-                        Category
-                        <select
-                          id="entryCategory"
-                          value={entryForm.category}
-                          onChange={(event) =>
-                            setEntryForm({
-                              ...entryForm,
-                              category: event.target.value,
-                            })
-                          }
-                          className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-normal text-[#18392f] outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                        >
-                          {(entryType === "sale"
-                            ? saleCategories
-                            : expenseCategories
-                          ).map((category) => (
-                            <option key={category}>{category}</option>
-                          ))}
-                        </select>
-                        {formError.category && (
-                          <span className="mt-1 block text-xs text-red-600">
-                            {formError.category}
-                          </span>
-                        )}
-                      </label>
+                    Description
+                    <input
+                      id="entryDescription"
+                      value={entryForm.description}
+                      onChange={(event) =>
+                        setEntryForm({
+                          ...entryForm,
+                          description: event.target.value,
+                        })
+                      }
+                      placeholder="e.g. Counter sales"
+                      className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+                    />
+                    {formError.description && (
+                      <span className="mt-1 block text-xs text-red-600">
+                        {formError.description}
+                      </span>
                     )}
-                    {entryType == "AEPS" ? (
-                      <label
-                        className="block text-xs font-semibold text-[#52685d]"
-                        htmlFor="entryPayment"
+                  </label>
+                  <div
+                    className="grid gap-2 sm:grid-cols-2"
+                  >
+                    <label
+                      className="block text-xs font-semibold text-[#52685d]"
+                      htmlFor="entryCategory"
+                    >
+                      Category
+                      <select
+                        id="entryCategory"
+                        value={entryForm.category}
+                        onChange={(event) =>
+                          setEntryForm({
+                            ...entryForm,
+                            category: event.target.value,
+                          })
+                        }
+                        className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-normal text-[#18392f] outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                       >
-                        Transaction
-                        <select
-                          id="entryPayment"
-                          value={entryForm.type}
-                          onChange={(event) =>
-                            setEntryForm({
-                              ...entryForm,
-                              type: event.target.value,
-                            })
-                          }
-                          className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-normal text-[#18392f] outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                        >
-                          {typeOptions.map((payment) => (
-                            <option key={payment}>{payment}</option>
-                          ))}
-                        </select>
-                        {formError.type && (
-                          <span className="mt-1 block text-xs text-red-600">
-                            {formError.type}
-                          </span>
-                        )}
-                      </label>
-                    ) : (
-                      <label
-                        className="block text-xs font-semibold text-[#52685d]"
-                        htmlFor="entryPayment"
+                        {(entryType === "sale"
+                          ? saleCategories
+                          : expenseCategories
+                        ).map((category) => (
+                          <option key={category}>{category}</option>
+                        ))}
+                      </select>
+                      {formError.category && (
+                        <span className="mt-1 block text-xs text-red-600">
+                          {formError.category}
+                        </span>
+                      )}
+                    </label>
+                    <label
+                      className="block text-xs font-semibold text-[#52685d]"
+                      htmlFor="entryPayment"
+                    >
+                      Payment
+                      <select
+                        id="entryPayment"
+                        value={entryForm.payment}
+                        onChange={(event) =>
+                          setEntryForm({
+                            ...entryForm,
+                            payment: event.target.value,
+                          })
+                        }
+                        className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-normal text-[#18392f] outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
                       >
-                        Payment
-                        <select
-                          id="entryPayment"
-                          value={entryForm.payment}
-                          onChange={(event) =>
-                            setEntryForm({
-                              ...entryForm,
-                              payment: event.target.value,
-                            })
-                          }
-                          className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-xs font-normal text-[#18392f] outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                        >
-                          {paymentOptions.map((payment) => (
-                            <option key={payment}>{payment}</option>
-                          ))}
-                        </select>
-                        {formError.payment && (
-                          <span className="mt-1 block text-xs text-red-600">
-                            {formError.payment}
-                          </span>
-                        )}
-                      </label>
-                    )}
+                        {paymentOptions.map((payment) => (
+                          <option key={payment}>{payment}</option>
+                        ))}
+                      </select>
+                      {formError.payment && (
+                        <span className="mt-1 block text-xs text-red-600">
+                          {formError.payment}
+                        </span>
+                      )}
+                    </label>
                   </div>
                   <label
                     className="block text-xs font-semibold text-[#52685d]"
@@ -1730,7 +1515,6 @@ function Dashboard() {
                         ? {
                             sale: "bg-[#176044] text-white",
                             expense: "bg-[#a05c48] text-white",
-                            AEPS: "bg-zinc-900 text-white",
                           }[entryType] || ""
                         : "text-[#718078]"
                     }`}
@@ -1739,7 +1523,7 @@ function Dashboard() {
                       <LuLoaderCircle className="animate-spin text-2xl" />
                     ) : (
                       <>
-                        Save {entryType == "AEPS" ? "transaction" : entryType}
+                        Save {entryType}
                       </>
                     )}
                   </button>
@@ -1759,698 +1543,114 @@ function Dashboard() {
             </article>
           </section>
 
-          <section
-            id="transactions"
-            className="mt-5 rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
-          >
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="font-serif text-xl font-semibold text-[#18392f]">
-                  Recent transactions
-                </h2>
-                <p className="mt-1 text-sm text-[#718078]">
-                  Sales and expenses recorded for {period.toLowerCase()}.
-                </p>
-              </div>
-              <div
-                className="inline-flex w-fit rounded-xl border border-[#d7e1da] bg-[#f7faf8] p-1"
-                aria-label="Filter transactions"
-              >
-                {transactionFilters.map(({ label, value }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={transactionFilter === value}
-                    onClick={() => setTransactionFilter(value)}
-                    className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${transactionFilter === value ? "bg-white text-[#176044] shadow-sm" : "text-[#718078] hover:text-[#176044]"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4">
-              {records.length ? (
-                records
-                  .filter((record) => {
-                    if (transactionFilter == "sale") {
-                      return record.type == "sale";
-                    }
-                    if (transactionFilter == "expense") {
-                      return record.type == "expense";
-                    }
-
-                    return record;
-                  })
-                  .map((transaction) => (
-                    <div
-                      key={transaction._id}
-                      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-[#e8eee8] py-4 transition-colors hover:bg-[#fbfdfb] sm:grid-cols-[minmax(0,1.6fr)_1fr_0.8fr_auto_auto] sm:gap-4"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${transaction.type === "sale" ? "bg-[#e4f0e5] text-[#397354]" : "bg-[#f8e9e4] text-[#a05c48]"}`}
-                        >
-                          {transaction.type === "sale" ? (
-                            <FiArrowDownRight size={17} aria-hidden="true" />
-                          ) : (
-                            <FiArrowUpRight size={17} aria-hidden="true" />
-                          )}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-[#29463a]">
-                            {transaction.description}
-                          </p>
-
-                          <p className="mt-0.5 hidden text-xs text-[#839188] sm:block">
-                            {transaction.category}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="hidden text-sm text-[#64766d] sm:block">
-                        {transaction.payment}
-                      </span>
-                      <span className="hidden text-sm text-[#718078] sm:block">
-                        {formatRelativeDate(formatDate(transaction.createdAt))}
-                      </span>
-                      <span
-                        className={`text-right text-sm font-bold ${transaction.type === "sale" ? "text-[#397354]" : "text-[#a05c48]"}`}
-                      >
-                        {transaction.type === "sale" ? "+" : "−"}
-                        {formatMoney(transaction.amount)}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${transaction.type} record`}
-                        title="Delete record"
-                        disabled={Boolean(deletingTransactionKey)}
-                        onClick={() =>
-                          setDeleteConfirmation({
-                            kind: "record",
-                            transaction,
-                          })
-                        }
-                        className="flex h-9 w-9 items-center justify-center rounded-md text-[#a05c48] transition hover:bg-[#f8e9e4] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {deletingTransactionKey ===
-                        `record:${transaction._id}` ? (
-                          <LuLoaderCircle
-                            className="animate-spin"
-                            size={17}
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <FiTrash2 size={16} aria-hidden="true" />
-                        )}
-                      </button>
-                    </div>
-                  ))
-              ) : (
-                <p className="border-t border-[#e8eee8] py-8 text-center text-sm text-[#839188]">
-                  No transactions for this period.
-                </p>
-              )}
-            </div>
-          </section>
-
-          <section
-            id="aeps-transactions"
-            className="mt-5 rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
-          >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="font-serif text-xl font-semibold text-[#18392f]">
-                  Recent transactions
-                </h2>
-                <p className="mt-1 text-sm text-[#718078]">
-                  AEPS transactions recorded for {period.toLowerCase()}.
-                </p>
-              </div>
-              <span className="w-fit rounded-full bg-[#edf3ef] px-3 py-1 text-xs font-semibold text-[#397354]">
-                AEPS
-              </span>
-            </div>
-
-            <div className="mt-4">
-              {aepsRecords.length ? (
-                aepsRecords.map((transaction) => (
-                  <div
-                    key={transaction._id}
-                    className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-[#e8eee8] py-4 transition-colors hover:bg-[#fbfdfb] sm:grid-cols-[minmax(0,1.6fr)_1fr_0.8fr_auto_auto] sm:gap-4"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#e9eef5] text-[#526b83]">
-                        <FiCreditCard size={17} aria-hidden="true" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-[#29463a]">
-                          {transaction.name}
-                        </p>
-                        <p className="mt-0.5 text-xs capitalize text-[#839188]">
-                          AEPS {transaction.type}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="hidden text-sm text-[#64766d] sm:block">
-                      AEPS
-                    </span>
-                    <span className="hidden text-sm text-[#718078] sm:block">
-                      {formatRelativeDate(formatDate(transaction.createdAt))}
-                    </span>
-                    <span className="text-right text-sm font-bold text-[#526b83]">
-                      {formatMoney(transaction.amount)}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Delete AEPS ${transaction.type} transaction`}
-                      title="Delete AEPS transaction"
-                      disabled={Boolean(deletingTransactionKey)}
-                      onClick={() =>
-                        setDeleteConfirmation({
-                          kind: "aeps",
-                          transaction,
-                        })
-                      }
-                      className="flex h-9 w-9 items-center justify-center rounded-md text-[#a05c48] transition hover:bg-[#f8e9e4] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {deletingTransactionKey ===
-                      `aeps:${transaction._id}` ? (
-                        <LuLoaderCircle
-                          className="animate-spin"
-                          size={17}
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <FiTrash2 size={16} aria-hidden="true" />
-                      )}
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="border-t border-[#e8eee8] py-8 text-center text-sm text-[#839188]">
-                  No AEPS transactions for this period.
-                </p>
-              )}
-            </div>
-          </section>
+          <TransactionsSection
+            records={records}
+            period={period}
+            transactionFilter={transactionFilter}
+            setTransactionFilter={setTransactionFilter}
+            deletingTransactionKey={deletingTransactionKey}
+            setDeleteConfirmation={setDeleteConfirmation}
+            formatDate={formatDate}
+            formatMoney={formatMoney}
+            formatRelativeDate={formatRelativeDate}
+          />
 
           <p className="mt-5 text-center text-xs text-[#839188]">
             DailyRokar · Shop ledger
           </p>
+            </>
+          ) : activePage === "aeps" ? (
+            <AepsLedgerPage
+              transactions={transactions}
+              period={period}
+              user={user}
+              entryForm={entryForm}
+              setEntryForm={setEntryForm}
+              formError={formError}
+              message={message}
+              loading={loading}
+              isEntryFormOpen={isEntryFormOpen}
+              onOpenEntry={() => openEntryForm("AEPS")}
+              onCloseEntry={() => {
+                setIsEntryFormOpen(false);
+                setFormError({});
+                setMessage({ type: "", text: "" });
+              }}
+              onSubmitEntry={handleCreateAEPSTransaction}
+              deletingTransactionKey={deletingTransactionKey}
+              setDeleteConfirmation={setDeleteConfirmation}
+              formatDate={formatDate}
+              formatMoney={formatMoney}
+              formatRelativeDate={formatRelativeDate}
+            />
+          ) : (
+            <section className="rounded-2xl border border-[#dce6de] bg-white px-6 py-16 text-center shadow-[0_6px_22px_rgba(24,57,47,0.04)]">
+              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e4f0e5] text-[#176044]">
+                {activePage === "customers" ? (
+                  <FiUsers size={24} aria-hidden="true" />
+                ) : (
+                  <FiFileText size={24} aria-hidden="true" />
+                )}
+              </span>
+              <h2 className="mt-5 font-serif text-2xl font-semibold text-[#18392f]">
+                {navigationItems.find((item) => item.id === activePage)?.label}
+              </h2>
+              <p className="mt-2 text-sm text-[#718078]">
+                This feature is coming soon.
+              </p>
+            </section>
+          )}
         </main>
       </div>
       {deleteConfirmation && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#10291f]/60 p-4 backdrop-blur-[2px]">
-          <section
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="deleteTransactionTitle"
-            aria-describedby="deleteTransactionDescription"
-            className="w-full max-w-md overflow-hidden rounded-2xl border border-[#e8eee8] bg-white shadow-[0_24px_80px_rgba(0,0,0,0.24)]"
-          >
-            <div className="flex items-start gap-4 p-5 sm:p-6">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f8e9e4] text-[#a05c48]">
-                <FiTrash2 size={19} aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2
-                  id="deleteTransactionTitle"
-                  className="font-serif text-xl font-semibold text-[#18392f]"
-                >
-                  Delete this{" "}
-                  {deleteConfirmation.kind === "aeps" ? "AEPS " : ""}
-                  {deleteConfirmation.transaction.type}?
-                </h2>
-                <p
-                  id="deleteTransactionDescription"
-                  className="mt-2 text-sm leading-6 text-[#64766d]"
-                >
-                  This will permanently remove the transaction and adjust the
-                  matching balance. This action cannot be undone.
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Cancel deletion"
-                disabled={Boolean(deletingTransactionKey)}
-                onClick={() => setDeleteConfirmation(null)}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#718078] transition hover:bg-[#edf3ef] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <FiX size={17} aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="mx-5 mb-5 rounded-xl border border-[#e8eee8] bg-[#f7faf8] px-4 py-3 sm:mx-6">
-              <p className="truncate text-sm font-semibold text-[#29463a]">
-                {deleteConfirmation.kind === "aeps"
-                  ? deleteConfirmation.transaction.name || "AEPS transaction"
-                  : deleteConfirmation.transaction.description ||
-                    "Ledger transaction"}
-              </p>
-              <p className="mt-1 text-xs capitalize text-[#718078]">
-                {deleteConfirmation.kind === "aeps"
-                  ? "AEPS · "
-                  : ""}
-                {deleteConfirmation.transaction.type}
-                {" · "}
-                {formatMoney(deleteConfirmation.transaction.amount)}
-              </p>
-            </div>
-
-            <div className="flex flex-col-reverse gap-2 border-t border-[#e8eee8] bg-[#fbfcfb] p-4 sm:flex-row sm:justify-end sm:px-6">
-              <button
-                type="button"
-                disabled={Boolean(deletingTransactionKey)}
-                onClick={() => setDeleteConfirmation(null)}
-                className="h-10 rounded-lg border border-[#d7e1da] bg-white px-4 text-sm font-semibold text-[#52685d] transition hover:bg-[#f1f5f1] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={Boolean(deletingTransactionKey)}
-                onClick={() => {
-                  if (deleteConfirmation.kind === "aeps") {
-                    handleDeleteAepsTransaction(
-                      deleteConfirmation.transaction,
-                    );
-                  } else {
-                    handleDeleteRecord(deleteConfirmation.transaction);
-                  }
-                }}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#a04436] px-4 text-sm font-bold text-white transition hover:bg-[#87372d] focus:outline-none focus:ring-4 focus:ring-[#a04436]/20 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {deletingTransactionKey ? (
-                  <>
-                    <LuLoaderCircle
-                      className="animate-spin"
-                      size={16}
-                      aria-hidden="true"
-                    />
-                    Deleting…
-                  </>
-                ) : (
-                  <>
-                    <FiTrash2 size={15} aria-hidden="true" />
-                    Delete transaction
-                  </>
-                )}
-              </button>
-            </div>
-          </section>
-        </div>
+        <DeleteTransactionPopup
+          transaction={deleteConfirmation}
+          isDeleting={Boolean(deletingTransactionKey)}
+          onClose={() => setDeleteConfirmation(null)}
+          onConfirm={() => {
+            if (deleteConfirmation.kind === "aeps") {
+              handleDeleteAepsTransaction(deleteConfirmation.transaction);
+            } else {
+              handleDeleteRecord(deleteConfirmation.transaction);
+            }
+          }}
+          formatMoney={formatMoney}
+        />
       )}
       {isProfileOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10291f]/55 p-4">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profileDialogTitle"
-            className="w-full max-w-xl rounded-3xl border border-[#e8eee8] bg-white p-5 shadow-[0_24px_80px_rgba(0,0,0,0.2)] sm:p-7"
-          >
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase text-[#397354]">
-                  Account
-                </p>
-                <h2
-                  id="profileDialogTitle"
-                  className="mt-2 font-serif text-2xl font-semibold text-[#18392f]"
-                >
-                  {profileMode === "details"
-                    ? "Edit profile details"
-                    : profileMode === "verify"
-                      ? "Verify your email"
-                      : profileMode === "new-password"
-                        ? "Choose a new password"
-                        : "Password updated"}
-                </h2>
-              </div>
-              <button
-                type="button"
-                aria-label="Close profile editor"
-                onClick={() => {
-                  setEditableProfileFields({ shopName: false, name: false });
-                  setIsProfileOpen(false);
-                  setMessage({
-                    type: "",
-                    text: "",
-                  });
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-md text-[#718078] hover:bg-[#edf3ef]"
-              >
-                <FiX size={18} aria-hidden="true" />
-              </button>
-            </div>
-
-            {profileMode === "details" && (
-              <>
-                <div className="mb-5 rounded-xl border border-[#e6eee8] bg-[#f7faf8] p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#397354]">
-                    Profile details
-                  </p>
-                  <p className="mt-1 text-sm text-[#64766d]">
-                    Update your business profile and account security.
-                  </p>
-                </div>
-
-                <form onSubmit={handleSaveProfile} className="space-y-4">
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-[#e6eee8] bg-[#f9fbfa] p-3.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <label
-                          className="text-sm font-semibold text-[#29463a]"
-                          htmlFor="shopName"
-                        >
-                          Shop name
-                        </label>
-                        <button
-                          type="button"
-                          aria-label="Edit shop name"
-                          onClick={() =>
-                            setEditableProfileFields((fields) => ({
-                              ...fields,
-                              shopName: !fields.shopName,
-                            }))
-                          }
-                          className="inline-flex items-center gap-1 rounded-full border border-[#d7e1da] px-2.5 py-1.5 text-xs font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
-                        >
-                          {editableProfileFields.shopName ? "Cancel" : "Edit"}
-                          <LuPencil size={12} aria-hidden="true" />
-                        </button>
-                      </div>
-                      <input
-                        id="shopName"
-                        disabled={!editableProfileFields.shopName}
-                        name="shopName"
-                        value={userForm.shopName}
-                        onChange={handleInputChange}
-                        className={`${!editableProfileFields.shopName ? "cursor-not-allowed bg-[#edf2ef] text-[#718078]" : "bg-white text-[#18392f]"} mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10`}
-                      />
-                    </div>
-
-                    <div className="rounded-xl border border-[#e6eee8] bg-[#f9fbfa] p-3.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <label
-                          className="text-sm font-semibold text-[#29463a]"
-                          htmlFor="profileFullName"
-                        >
-                          Full name
-                        </label>
-                        <button
-                          type="button"
-                          aria-label="Edit full name"
-                          onClick={() =>
-                            setEditableProfileFields((fields) => ({
-                              ...fields,
-                              name: !fields.name,
-                            }))
-                          }
-                          className="inline-flex items-center gap-1 rounded-full border border-[#d7e1da] px-2.5 py-1.5 text-xs font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
-                        >
-                          {editableProfileFields.name ? "Cancel" : "Edit"}
-                          <LuPencil size={12} aria-hidden="true" />
-                        </button>
-                      </div>
-                      <input
-                        disabled={!editableProfileFields.name}
-                        id="profileFullName"
-                        name="name"
-                        autoComplete="name"
-                        onChange={handleInputChange}
-                        value={userForm.name}
-                        className={`${!editableProfileFields.name ? "cursor-not-allowed bg-[#edf2ef] text-[#718078]" : "bg-white text-[#18392f]"} mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal outline-none transition focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10`}
-                      />
-                    </div>
-                  </div>
-
-                  {message.text && (
-                    <div
-                      className={`rounded-lg border px-3 py-2 text-sm ${
-                        message.type === "error"
-                          ? "border-red-200 bg-red-50 text-red-700"
-                          : "border-green-200 bg-green-50 text-green-700"
-                      }`}
-                    >
-                      {message.text}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    // disabled={loading}
-                    className="group mt-2 flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36] focus:outline-none focus:ring-4 focus:ring-[#176044]/20 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading ? (
-                      <LuLoaderCircle className="animate-spin text-2xl" />
-                    ) : (
-                      <>
-                        Save profile
-                        <FiSave size={16} aria-hidden="true" />
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                <section className="mt-5 rounded-xl border border-[#e8eee8] bg-[#f8faf8] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-[#29463a]">
-                        Password
-                      </h3>
-                      <p className="mt-1 text-xs text-[#718078]">
-                        Verify {user?.email} before changing it.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSentOtp}
-                      className="h-9 shrink-0 rounded-md border border-[#d7e1da] bg-white px-3 text-sm font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
-                    >
-                      {passwordloading ? (
-                        <LuLoaderCircle className="animate-spin text-2xl" />
-                      ) : (
-                        "Change password"
-                      )}
-                    </button>
-                  </div>
-                </section>
-
-                <div className="mt-4 border-t border-[#e8eee8] pt-3">
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-[#a05c48] transition hover:bg-[#f8e9e4]"
-                  >
-                    {logoutLoading ? (
-                      <LuLoaderCircle className="animate-spin text-2xl" />
-                    ) : (
-                      <>
-                        <FiLogOut size={16} aria-hidden="true" />
-                        Log out
-                      </>
-                    )}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {profileMode === "verify" && (
-              <>
-                <p className="text-sm leading-6 text-[#64766d]">
-                  Confirm access to{" "}
-                  <span className="font-semibold text-[#29463a]">
-                    {user?.email}
-                  </span>{" "}
-                  before setting a new password.
-                </p>
-
-                <form onSubmit={handleVerifyOtp} className="mt-4 space-y-4">
-                  <label
-                    className="block text-sm font-semibold text-[#29463a]"
-                    htmlFor="passwordVerificationCode"
-                  >
-                    Email verification code
-                    <input
-                      id="otp"
-                      name="otp"
-                      value={userForm.otp.replace(/\D/g, "").slice(0, 6)}
-                      onChange={handleInputChange}
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      className="mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-center text-lg font-semibold text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                    />
-                    {formError.otp && (
-                      <span className="mt-1 block text-xs text-red-600">
-                        {formError.otp}
-                      </span>
-                    )}
-                  </label>
-                  {message.text && (
-                    <div
-                      className={`rounded-lg border px-3 py-2 text-sm ${
-                        message.type === "error"
-                          ? "border-red-200 bg-red-50 text-red-700"
-                          : "border-green-200 bg-green-50 text-green-700"
-                      }`}
-                    >
-                      {message.text}
-                    </div>
-                  )}
-                  <button
-                    type="submit"
-                    className="h-10 flex items-center justify-center w-full rounded-md bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36]"
-                  >
-                    {loading ? (
-                      <LuLoaderCircle className="animate-spin text-2xl" />
-                    ) : (
-                      "Verify email"
-                    )}
-                  </button>
-                </form>
-                <div className="mt-5 text-center">
-                  <p aria-live="polite" className="text-sm text-[#687970]">
-                    {secondsUntilResend > 0
-                      ? "You can request another code when the timer ends."
-                      : "Didn't receive a code? Request another one."}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={secondsUntilResend > 0}
-                    onClick={handleResentOtp}
-                    aria-label={
-                      secondsUntilResend > 0
-                        ? `Resend verification code in ${countdownText}`
-                        : "Resend verification code"
-                    }
-                    className="mt-2 inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-bold text-[#176044] transition hover:bg-[#e4f0e5] disabled:cursor-not-allowed disabled:text-[#98a79e] disabled:hover:bg-transparent"
-                  >
-                    <FiRefreshCw size={15} aria-hidden="true" />
-                    {secondsUntilResend > 0
-                      ? `Resend code in ${countdownText}`
-                      : "Resend code"}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setProfileMode("details")}
-                  className="mt-3 inline-flex h-9 items-center gap-2 rounded-md px-2 text-sm font-semibold text-[#64766d] hover:text-[#176044]"
-                >
-                  <FiArrowLeft size={15} aria-hidden="true" /> Back to profile
-                </button>
-              </>
-            )}
-
-            {profileMode === "new-password" && (
-              <>
-                <form onSubmit={handleChangePassword} className="space-y-4">
-                  <label
-                    className="block text-sm font-semibold text-[#29463a]"
-                    htmlFor="password"
-                  >
-                    New password
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      autoComplete="new-password"
-                      value={userForm.password}
-                      onChange={handleInputChange}
-                      className="mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                    />
-                    {formError.password && (
-                      <span className="mt-1 block text-xs text-red-600">
-                        {formError.password}
-                      </span>
-                    )}
-                  </label>
-                  <label
-                    className="block text-sm font-semibold text-[#29463a]"
-                    htmlFor="confirmPassword"
-                  >
-                    Confirm new password
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type="password"
-                      autoComplete="new-password"
-                      value={userForm.confirmPassword}
-                      onChange={handleInputChange}
-                      className="mt-2 h-11 w-full rounded-md border border-[#d7e1da] px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                    />
-                    {formError.confirmPassword && (
-                      <span className="mt-1 block text-xs text-red-600">
-                        {formError.confirmPassword}
-                      </span>
-                    )}
-                  </label>
-                  {message.text && (
-                    <div
-                      className={`rounded-lg border px-3 py-2 text-sm ${
-                        message.type === "error"
-                          ? "border-red-200 bg-red-50 text-red-700"
-                          : "border-green-200 bg-green-50 text-green-700"
-                      }`}
-                    >
-                      {message.text}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="h-10 flex items-center justify-center w-full rounded-md bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36]"
-                  >
-                    {loading ? (
-                      <LuLoaderCircle className="animate-spin text-2xl" />
-                    ) : (
-                      "Change Password"
-                    )}
-                  </button>
-                </form>
-                <button
-                  type="button"
-                  onClick={() => setProfileMode("details")}
-                  className="mt-3 inline-flex h-9 items-center gap-2 rounded-md px-2 text-sm font-semibold text-[#64766d] hover:text-[#176044]"
-                >
-                  <FiArrowLeft size={15} aria-hidden="true" /> Back to profile
-                </button>
-              </>
-            )}
-
-            {profileMode === "complete" && (
-              <div className="py-3 text-center">
-                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#e4f0e5] text-[#397354]">
-                  <FiCheck size={23} aria-hidden="true" />
-                </span>
-                <p className="mt-4 font-semibold text-[#29463a]">
-                  Password changed successfully
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[#718078]">
-                  Try not to share your current password with any one except
-                  your girlfriend if you have one.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setProfileMode("details")}
-                  className="mt-5 h-10 rounded-md bg-[#176044] px-4 text-sm font-bold text-white hover:bg-[#124d36]"
-                >
-                  Back to profile
-                </button>
-              </div>
-            )}
-          </section>
-        </div>
+        <ProfilePopup
+          profileMode={profileMode}
+          setProfileMode={setProfileMode}
+          user={user}
+          userForm={userForm}
+          formError={formError}
+          message={message}
+          editableProfileFields={editableProfileFields}
+          setEditableProfileFields={setEditableProfileFields}
+          handleInputChange={handleInputChange}
+          handleSaveProfile={handleSaveProfile}
+          handleSentOtp={handleSentOtp}
+          handleLogout={handleLogout}
+          handleVerifyOtp={handleVerifyOtp}
+          handleResentOtp={handleResentOtp}
+          handleChangePassword={handleChangePassword}
+          loading={loading}
+          passwordloading={passwordloading}
+          logoutLoading={logoutLoading}
+          secondsUntilResend={secondsUntilResend}
+          countdownText={countdownText}
+          onClose={() => {
+            setEditableProfileFields({ shopName: false, name: false });
+            setIsProfileOpen(false);
+            setMessage({ type: "", text: "" });
+          }}
+        />
       )}
       {errorPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10291f]/55 p-4">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profileDialogTitle"
-            className="w-full max-w-115 rounded-lg bg-white p-5 shadow-[0_24px_80px_rgba(0,0,0,0.2)] sm:p-7"
-          >
+        <Popup
+          label="Dashboard error"
+          className="w-full max-w-115 rounded-lg bg-white p-5 shadow-[0_24px_80px_rgba(0,0,0,0.2)] sm:p-7"
+        >
             <div className="rounded-lg border px-3 py-2 text-sm border-red-200 bg-red-50 text-red-700">
               {error}
             </div>
@@ -2460,20 +1660,15 @@ function Dashboard() {
             >
               OK
             </button>
-          </section>
-        </div>
+        </Popup>
       )}
       {screenLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10291f]/55 p-4">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profileDialogTitle"
-            className="w-full flex justify-center items-center max-w-115 rounded-lgsm:p-7"
-          >
-            <LuLoaderCircle className="animate-spin text-3xl" />
-          </section>
-        </div>
+        <Popup
+          label="Loading dashboard"
+          className="w-full flex justify-center items-center max-w-115 rounded-lgsm:p-7"
+        >
+          <LuLoaderCircle className="animate-spin text-3xl" />
+        </Popup>
       )}
     </div>
   );
