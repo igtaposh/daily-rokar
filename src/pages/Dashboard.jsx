@@ -60,8 +60,8 @@ const getPeriodDateRange = (period, selectedStartDate, selectedEndDate) => {
 const navigationItems = [
   { id: "shop", label: "Shop Ledger", icon: FiBookOpen },
   { id: "aeps", label: "AEPS Transactions", icon: FiCreditCard },
-  { id: "customers", label: "Customer Ledger", icon: FiUsers },
-  { id: "billing", label: "Billing", icon: FiFileText },
+  // { id: "customers", label: "Customer Ledger", icon: FiUsers },
+  // { id: "billing", label: "Billing", icon: FiFileText },
 ];
 
 const periodOptions = ["Today", "Last 7 days", "This month"];
