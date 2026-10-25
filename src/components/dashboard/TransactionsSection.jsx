@@ -18,9 +18,8 @@ export default function TransactionsSection({
   setTransactionFilter,
   deletingTransactionKey,
   setDeleteConfirmation,
-  formatDate,
+  formatDateTime,
   formatMoney,
-  formatRelativeDate,
 }) {
   const filteredRecords = records.filter((record) => {
     if (transactionFilter == "sale") return record.type == "sale";
@@ -31,11 +30,11 @@ export default function TransactionsSection({
   return (
       <section
         id="transactions"
-        className="mt-5 rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
+        className="mt-5 rounded-2xl border border-[#e2e9e3] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.045)] sm:p-6"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-serif text-xl font-semibold text-[#18392f]">
+            <h2 className="text-lg font-bold tracking-tight text-[#18392f]">
               Recent transactions
             </h2>
             <p className="mt-1 text-sm text-[#718078]">
@@ -65,7 +64,7 @@ export default function TransactionsSection({
             filteredRecords.map((transaction) => (
               <div
                 key={transaction._id}
-                className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-[#e8eee8] py-4 transition-colors hover:bg-[#fbfdfb] sm:grid-cols-[minmax(0,1.6fr)_1fr_0.8fr_auto_auto] sm:gap-4"
+                className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-[#edf0ed] py-4 transition-colors hover:bg-[#fbfdfb] sm:grid-cols-[minmax(0,1.6fr)_1fr_0.8fr_auto_auto] sm:gap-4"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span
@@ -84,13 +83,16 @@ export default function TransactionsSection({
                     <p className="mt-0.5 hidden text-xs text-[#839188] sm:block">
                       {transaction.category}
                     </p>
+                    <p className="mt-1 text-[11px] text-[#718078] sm:hidden">
+                      {formatDateTime(transaction.createdAt)}
+                    </p>
                   </div>
                 </div>
                 <span className="hidden text-sm text-[#64766d] sm:block">
                   {transaction.payment}
                 </span>
-                <span className="hidden text-sm text-[#718078] sm:block">
-                  {formatRelativeDate(formatDate(transaction.createdAt))}
+                <span className="hidden text-xs text-[#718078] sm:block">
+                  {formatDateTime(transaction.createdAt)}
                 </span>
                 <span
                   className={`text-right text-sm font-bold ${transaction.type === "sale" ? "text-[#397354]" : "text-[#a05c48]"}`}

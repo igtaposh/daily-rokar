@@ -10,6 +10,7 @@ export default function DeleteTransactionPopup({
   formatMoney,
 }) {
   const isAeps = transaction.kind === "aeps";
+  const isCashManagement = transaction.kind === "cms";
   const item = transaction.transaction;
 
   return (
@@ -27,9 +28,9 @@ export default function DeleteTransactionPopup({
         <div className="min-w-0 flex-1">
           <h2
             id="deleteTransactionTitle"
-            className="font-serif text-xl font-semibold text-[#18392f]"
+            className="text-lg font-bold tracking-tight text-[#18392f]"
           >
-            Delete this {isAeps ? "AEPS " : ""}
+            Delete this {isAeps ? "AEPS " : isCashManagement ? "cash " : ""}
             {item.type}?
           </h2>
           <p
@@ -53,12 +54,13 @@ export default function DeleteTransactionPopup({
 
       <div className="mx-5 mb-5 rounded-xl border border-[#e8eee8] bg-[#f7faf8] px-4 py-3 sm:mx-6">
         <p className="truncate text-sm font-semibold text-[#29463a]">
-          {isAeps
-            ? item.name || "AEPS transaction"
+          {isAeps || isCashManagement
+            ? item.name ||
+              (isCashManagement ? "Cash transaction" : "AEPS transaction")
             : item.description || "Ledger transaction"}
         </p>
         <p className="mt-1 text-xs capitalize text-[#718078]">
-          {isAeps ? "AEPS · " : ""}
+          {isAeps ? "AEPS · " : isCashManagement ? `${item.method} · ` : ""}
           {item.type} · {formatMoney(item.amount)}
         </p>
       </div>

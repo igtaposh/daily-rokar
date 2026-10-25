@@ -42,7 +42,7 @@ export default function ProfilePopup({
           <p className="text-xs font-bold uppercase text-[#397354]">Account</p>
           <h2
             id="profileDialogTitle"
-            className="mt-2 font-serif text-2xl font-semibold text-[#18392f]"
+            className="mt-2 text-xl font-bold tracking-tight text-[#18392f]"
           >
             {profileMode === "details"
               ? "Edit profile details"

@@ -6,18 +6,17 @@ export default function AepsTransactionsList({
   period,
   deletingTransactionKey,
   setDeleteConfirmation,
-  formatDate,
+  formatDateTime,
   formatMoney,
-  formatRelativeDate,
 }) {
   return (
     <section
       id="aeps-transactions"
-      className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
+      className="rounded-2xl border border-[#e2e9e3] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.045)] sm:p-6"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-serif text-xl font-semibold text-[#18392f]">
+          <h2 className="text-lg font-bold tracking-tight text-[#18392f]">
             Recent AEPS transactions
           </h2>
           <p className="mt-1 text-sm text-[#718078]">
@@ -47,13 +46,26 @@ export default function AepsTransactionsList({
                   <p className="mt-0.5 text-xs capitalize text-[#839188]">
                     AEPS {transaction.type}
                   </p>
+                  {transaction.adharNumber && (
+                    <span className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border border-[#d8e5f0] bg-[#f0f6fb] px-2 py-1 text-[11px] font-semibold text-[#385d7a]">
+                      <span className="shrink-0 uppercase tracking-wide text-[#6a8297]">
+                        Aadhaar
+                      </span>
+                      <span className="truncate font-bold tracking-[0.04em]">
+                        {transaction.adharNumber}
+                      </span>
+                    </span>
+                  )}
+                  <p className="mt-1 text-[11px] text-[#718078] sm:hidden">
+                    {formatDateTime(transaction.createdAt)}
+                  </p>
                 </div>
               </div>
               <span className="hidden text-sm text-[#64766d] sm:block">
                 AEPS
               </span>
-              <span className="hidden text-sm text-[#718078] sm:block">
-                {formatRelativeDate(formatDate(transaction.createdAt))}
+              <span className="hidden text-xs text-[#718078] sm:block">
+                {formatDateTime(transaction.createdAt)}
               </span>
               <span className="text-right text-sm font-bold text-[#526b83]">
                 {formatMoney(transaction.amount)}

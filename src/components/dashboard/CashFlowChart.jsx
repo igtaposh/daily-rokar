@@ -12,11 +12,11 @@ export default function CashFlowChart({
   return (
     <article
       id="cashflow"
-      className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6"
+      className="rounded-2xl border border-[#e2e9e3] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.045)] sm:p-6"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="font-serif text-xl font-semibold text-[#18392f]">
+          <h2 className="text-lg font-bold tracking-tight text-[#18392f]">
             Cash flow
           </h2>
           <p className="mt-1 text-sm text-[#718078]">
