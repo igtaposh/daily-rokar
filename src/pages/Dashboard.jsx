@@ -60,7 +60,7 @@ const getPeriodDateRange = (period, selectedStartDate, selectedEndDate) => {
 const navigationItems = [
   { id: "shop", label: "Shop Ledger", icon: FiBookOpen },
   { id: "aeps", label: "AEPS Transactions", icon: FiCreditCard },
-  // { id: "customers", label: "Customer Ledger", icon: FiUsers },
+  { id: "customers", label: "Customer Ledger", icon: FiUsers },
   // { id: "billing", label: "Billing", icon: FiFileText },
 ];
 
@@ -188,6 +188,7 @@ function Dashboard() {
   });
   const [loading, setLoading] = useState(false);
   const [screenLoading, setScreenLoading] = useState(false);
+  const [dateFilterLoading, setDateFilterLoading] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [passwordloading, setPasswordLoading] = useState(false);
   const [userForm, setUserForm] = useState({
@@ -423,6 +424,10 @@ function Dashboard() {
             "Fetched an error while retriving your data. Please try after some time.",
           );
         }
+      } finally {
+        if (isCurrentRequest && activePage === "shop") {
+          setDateFilterLoading(false);
+        }
       }
     };
 
@@ -432,7 +437,14 @@ function Dashboard() {
     return () => {
       isCurrentRequest = false;
     };
-  }, [period, selectedStartDate, selectedEndDate, recordsRefresh, setRecords]);
+  }, [
+    period,
+    selectedStartDate,
+    selectedEndDate,
+    recordsRefresh,
+    activePage,
+    setRecords,
+  ]);
 
   useEffect(() => {
     let isCurrentRequest = true;
@@ -458,6 +470,10 @@ function Dashboard() {
             "Unable to load AEPS transactions for this period. Please try again.",
           );
         }
+      } finally {
+        if (isCurrentRequest && activePage === "aeps") {
+          setDateFilterLoading(false);
+        }
       }
     };
 
@@ -472,6 +488,7 @@ function Dashboard() {
     selectedStartDate,
     selectedEndDate,
     recordsRefresh,
+    activePage,
     setTransactions,
   ]);
 
@@ -578,6 +595,7 @@ function Dashboard() {
     1,
     ...weeklySummary.flatMap((day) => [day.sales, day.expenses]),
   );
+
   const profileInitials = (user?.name ?? "")
     .trim()
     .split(/\s+/)
@@ -1360,193 +1378,237 @@ function Dashboard() {
                       ? "Manage customer credits and payments in one place."
                       : "This feature is coming soon."}
               </p>
-              {activePage !== "customers" && activePage !== "billing" && (
-                <p className="mt-2 text-xs font-medium text-[#839188]">
-                  Live records for your selected date range.
-                </p>
-              )}
+
+              <p className="mt-2 text-xs font-medium text-[#839188]">
+                Live records for your selected date range.
+              </p>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
-              {activePage !== "customers" && activePage !== "billing" && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div
-                    className="inline-flex rounded-xl border border-[#e2e9e3] bg-[#f8faf8] p-1"
-                    aria-label="Summary period"
-                  >
-                    {periodOptions.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        aria-pressed={period === option}
-                        onClick={() => {
-                          setRangeStartDraft(null);
-                          setPeriod(option);
-                        }}
-                        className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${period === option ? "bg-[#175b42] text-white shadow-sm" : "text-[#64766d] hover:bg-white hover:text-[#175b42]"}`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="relative">
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="inline-flex rounded-xl border border-[#e2e9e3] bg-[#f8faf8] p-1"
+                  aria-label="Summary period"
+                >
+                  {periodOptions.map((option) => (
                     <button
+                      key={option}
                       type="button"
-                      aria-label="Choose a date range"
-                      aria-expanded={isCalendarOpen}
-                      onClick={() => setIsCalendarOpen((isOpen) => !isOpen)}
-                      className={`inline-flex h-10 items-center gap-2 rounded-md border px-3 text-xs font-semibold transition ${
-                        period === "Custom range"
-                          ? "border-[#176044] bg-[#e4f0e5] text-[#176044]"
-                          : "border-[#d7e1da] bg-white text-[#52685d] shadow-sm hover:border-[#397354]"
-                      }`}
+                      aria-pressed={period === option}
+                      onClick={() => {
+                        const currentRange = getPeriodDateRange(
+                          period,
+                          selectedStartDate,
+                          selectedEndDate,
+                        );
+                        const nextRange = getPeriodDateRange(
+                          option,
+                          selectedStartDate,
+                          selectedEndDate,
+                        );
+                        if (
+                          ["shop", "aeps", "customers"].includes(activePage) &&
+                          (period !== option ||
+                            currentRange.startDate !== nextRange.startDate ||
+                            currentRange.endDate !== nextRange.endDate)
+                        ) {
+                          setDateFilterLoading(true);
+                        }
+                        setRangeStartDraft(null);
+                        setPeriod(option);
+                      }}
+                      className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${period === option ? "bg-[#175b42] text-white shadow-sm" : "text-[#64766d] hover:bg-white hover:text-[#175b42]"}`}
                     >
-                      <FiCalendar size={15} aria-hidden="true" />
-                      {period === "Custom range"
-                        ? formattedSelectedRange
-                        : "Pick a date"}
+                      {option}
                     </button>
-                    {isCalendarOpen && (
-                      <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-[#dce6de] bg-white p-4 shadow-[0_16px_48px_rgba(24,57,47,0.16)]">
-                        <div className="mb-4 flex items-center justify-between">
-                          <button
-                            type="button"
-                            aria-label="Previous month"
-                            onClick={() =>
-                              setCalendarMonth(
-                                (month) =>
-                                  new Date(
-                                    month.getFullYear(),
-                                    month.getMonth() - 1,
-                                    1,
-                                  ),
-                              )
-                            }
-                            className="flex h-8 w-8 items-center justify-center rounded-full text-[#64766d] transition hover:bg-[#edf3ef] hover:text-[#176044]"
-                          >
-                            <FiChevronLeft size={17} aria-hidden="true" />
-                          </button>
-                          <p className="text-sm font-bold text-[#18392f]">
-                            {calendarMonthLabel}
-                          </p>
-                          <button
-                            type="button"
-                            aria-label="Next month"
-                            disabled={
-                              calendarMonth.getFullYear() ===
-                                new Date().getFullYear() &&
-                              calendarMonth.getMonth() >= new Date().getMonth()
-                            }
-                            onClick={() =>
-                              setCalendarMonth(
-                                (month) =>
-                                  new Date(
-                                    month.getFullYear(),
-                                    month.getMonth() + 1,
-                                    1,
-                                  ),
-                              )
-                            }
-                            className="flex h-8 w-8 items-center justify-center rounded-full text-[#64766d] transition hover:bg-[#edf3ef] hover:text-[#176044] disabled:cursor-not-allowed disabled:opacity-35"
-                          >
-                            <FiChevronRight size={17} aria-hidden="true" />
-                          </button>
-                        </div>
-                        <p className="mb-3 text-center text-xs text-[#718078]">
-                          {rangeStartDraft
-                            ? `Start: ${formatCalendarDate(rangeStartDraft)} · Choose an end date`
-                            : "Choose a start date, then an end date"}
-                        </p>
-                        <div className="mb-2 grid grid-cols-7 text-center text-[11px] font-semibold text-[#839188]">
-                          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(
-                            (weekday) => (
-                              <span key={weekday} className="py-1">
-                                {weekday}
-                              </span>
-                            ),
-                          )}
-                        </div>
-                        <div className="grid grid-cols-7 gap-y-1">
-                          {calendarDays.map((day) => {
-                            const dayKey = getDateKey(day);
-                            const rangeStart =
-                              rangeStartDraft || selectedStartDate;
-                            const rangeEnd = rangeStartDraft
-                              ? rangeStartDraft
-                              : selectedEndDate;
-                            const isRangeStart = dayKey === rangeStart;
-                            const isRangeEnd = dayKey === rangeEnd;
-                            const isInRange =
-                              dayKey >= rangeStart && dayKey <= rangeEnd;
-                            const isToday = dayKey === todayKey;
-                            const isFuture = dayKey > todayKey;
-                            const isCurrentMonth =
-                              day.getMonth() === calendarMonth.getMonth();
-
-                            return (
-                              <button
-                                key={dayKey}
-                                type="button"
-                                disabled={isFuture}
-                                aria-label={new Intl.DateTimeFormat("en-IN", {
-                                  dateStyle: "full",
-                                }).format(day)}
-                                aria-pressed={isInRange}
-                                onClick={() => {
-                                  if (!rangeStartDraft) {
-                                    setRangeStartDraft(dayKey);
-                                    return;
-                                  }
-
-                                  const startDate =
-                                    dayKey < rangeStartDraft
-                                      ? dayKey
-                                      : rangeStartDraft;
-                                  const endDate =
-                                    dayKey < rangeStartDraft
-                                      ? rangeStartDraft
-                                      : dayKey;
-                                  setSelectedStartDate(startDate);
-                                  setSelectedEndDate(endDate);
-                                  setRangeStartDraft(null);
-                                  setPeriod("Custom range");
-                                  setIsCalendarOpen(false);
-                                }}
-                                className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full text-xs transition disabled:cursor-not-allowed disabled:opacity-30 ${
-                                  isRangeStart || isRangeEnd
-                                    ? "bg-[#176044] font-bold text-white"
-                                    : isInRange
-                                      ? "bg-[#e4f0e5] font-semibold text-[#176044]"
-                                      : isToday
-                                        ? "border border-[#a9c59e] font-bold text-[#176044]"
-                                        : isCurrentMonth
-                                          ? "text-[#52685d] hover:bg-[#edf3ef]"
-                                          : "text-[#aab5ad] hover:bg-[#edf3ef]"
-                                }`}
-                              >
-                                {day.getDate()}
-                              </button>
-                            );
-                          })}
-                        </div>
+                  ))}
+                </div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-label="Choose a date range"
+                    aria-expanded={isCalendarOpen}
+                    onClick={() => setIsCalendarOpen((isOpen) => !isOpen)}
+                    className={`inline-flex h-10 items-center gap-2 rounded-md border px-3 text-xs font-semibold transition ${
+                      period === "Custom range"
+                        ? "border-[#176044] bg-[#e4f0e5] text-[#176044]"
+                        : "border-[#d7e1da] bg-white text-[#52685d] shadow-sm hover:border-[#397354]"
+                    }`}
+                  >
+                    <FiCalendar size={15} aria-hidden="true" />
+                    {period === "Custom range"
+                      ? formattedSelectedRange
+                      : "Pick a date"}
+                  </button>
+                  {isCalendarOpen && (
+                    <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-[#dce6de] bg-white p-4 shadow-[0_16px_48px_rgba(24,57,47,0.16)]">
+                      <div className="mb-4 flex items-center justify-between">
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedStartDate(todayKey);
-                            setSelectedEndDate(todayKey);
-                            setRangeStartDraft(null);
-                            setPeriod("Custom range");
-                            setCalendarMonth(new Date(`${todayKey}T12:00:00`));
-                            setIsCalendarOpen(false);
-                          }}
-                          className="mt-3 w-full rounded-md bg-[#f1f5f1] py-2 text-xs font-semibold text-[#176044] transition hover:bg-[#e4f0e5]"
+                          aria-label="Previous month"
+                          onClick={() =>
+                            setCalendarMonth(
+                              (month) =>
+                                new Date(
+                                  month.getFullYear(),
+                                  month.getMonth() - 1,
+                                  1,
+                                ),
+                            )
+                          }
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-[#64766d] transition hover:bg-[#edf3ef] hover:text-[#176044]"
                         >
-                          Select today
+                          <FiChevronLeft size={17} aria-hidden="true" />
+                        </button>
+                        <p className="text-sm font-bold text-[#18392f]">
+                          {calendarMonthLabel}
+                        </p>
+                        <button
+                          type="button"
+                          aria-label="Next month"
+                          disabled={
+                            calendarMonth.getFullYear() ===
+                              new Date().getFullYear() &&
+                            calendarMonth.getMonth() >= new Date().getMonth()
+                          }
+                          onClick={() =>
+                            setCalendarMonth(
+                              (month) =>
+                                new Date(
+                                  month.getFullYear(),
+                                  month.getMonth() + 1,
+                                  1,
+                                ),
+                            )
+                          }
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-[#64766d] transition hover:bg-[#edf3ef] hover:text-[#176044] disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          <FiChevronRight size={17} aria-hidden="true" />
                         </button>
                       </div>
-                    )}
-                  </div>
+                      <p className="mb-3 text-center text-xs text-[#718078]">
+                        {rangeStartDraft
+                          ? `Start: ${formatCalendarDate(rangeStartDraft)} · Choose an end date`
+                          : "Choose a start date, then an end date"}
+                      </p>
+                      <div className="mb-2 grid grid-cols-7 text-center text-[11px] font-semibold text-[#839188]">
+                        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(
+                          (weekday) => (
+                            <span key={weekday} className="py-1">
+                              {weekday}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                      <div className="grid grid-cols-7 gap-y-1">
+                        {calendarDays.map((day) => {
+                          const dayKey = getDateKey(day);
+                          const rangeStart =
+                            rangeStartDraft || selectedStartDate;
+                          const rangeEnd = rangeStartDraft
+                            ? rangeStartDraft
+                            : selectedEndDate;
+                          const isRangeStart = dayKey === rangeStart;
+                          const isRangeEnd = dayKey === rangeEnd;
+                          const isInRange =
+                            dayKey >= rangeStart && dayKey <= rangeEnd;
+                          const isToday = dayKey === todayKey;
+                          const isFuture = dayKey > todayKey;
+                          const isCurrentMonth =
+                            day.getMonth() === calendarMonth.getMonth();
+
+                          return (
+                            <button
+                              key={dayKey}
+                              type="button"
+                              disabled={isFuture}
+                              aria-label={new Intl.DateTimeFormat("en-IN", {
+                                dateStyle: "full",
+                              }).format(day)}
+                              aria-pressed={isInRange}
+                              onClick={() => {
+                                if (!rangeStartDraft) {
+                                  setRangeStartDraft(dayKey);
+                                  return;
+                                }
+
+                                const startDate =
+                                  dayKey < rangeStartDraft
+                                    ? dayKey
+                                    : rangeStartDraft;
+                                const endDate =
+                                  dayKey < rangeStartDraft
+                                    ? rangeStartDraft
+                                    : dayKey;
+                                const currentRange = getPeriodDateRange(
+                                  period,
+                                  selectedStartDate,
+                                  selectedEndDate,
+                                );
+                                if (
+                                  ["shop", "aeps", "customers"].includes(
+                                    activePage,
+                                  ) &&
+                                  (period !== "Custom range" ||
+                                    currentRange.startDate !== startDate ||
+                                    currentRange.endDate !== endDate)
+                                ) {
+                                  setDateFilterLoading(true);
+                                }
+                                setSelectedStartDate(startDate);
+                                setSelectedEndDate(endDate);
+                                setRangeStartDraft(null);
+                                setPeriod("Custom range");
+                                setIsCalendarOpen(false);
+                              }}
+                              className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full text-xs transition disabled:cursor-not-allowed disabled:opacity-30 ${
+                                isRangeStart || isRangeEnd
+                                  ? "bg-[#176044] font-bold text-white"
+                                  : isInRange
+                                    ? "bg-[#e4f0e5] font-semibold text-[#176044]"
+                                    : isToday
+                                      ? "border border-[#a9c59e] font-bold text-[#176044]"
+                                      : isCurrentMonth
+                                        ? "text-[#52685d] hover:bg-[#edf3ef]"
+                                        : "text-[#aab5ad] hover:bg-[#edf3ef]"
+                              }`}
+                            >
+                              {day.getDate()}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentRange = getPeriodDateRange(
+                            period,
+                            selectedStartDate,
+                            selectedEndDate,
+                          );
+                          if (
+                            ["shop", "aeps", "customers"].includes(activePage) &&
+                            (period !== "Custom range" ||
+                              currentRange.startDate !== todayKey ||
+                              currentRange.endDate !== todayKey)
+                          ) {
+                            setDateFilterLoading(true);
+                          }
+                          setSelectedStartDate(todayKey);
+                          setSelectedEndDate(todayKey);
+                          setRangeStartDraft(null);
+                          setPeriod("Custom range");
+                          setCalendarMonth(new Date(`${todayKey}T12:00:00`));
+                          setIsCalendarOpen(false);
+                        }}
+                        className="mt-3 w-full rounded-md bg-[#f1f5f1] py-2 text-xs font-semibold text-[#176044] transition hover:bg-[#e4f0e5]"
+                      >
+                        Select today
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+
               <button
                 type="button"
                 onClick={handleLogout}
@@ -1831,7 +1893,14 @@ function Dashboard() {
               formatMoney={formatMoney}
             />
           ) : activePage === "customers" ? (
-            <CustomerLedgerPage />
+            <CustomerLedgerPage
+              {...getPeriodDateRange(
+                period,
+                selectedStartDate,
+                selectedEndDate,
+              )}
+              onDateFilterLoadingChange={setDateFilterLoading}
+            />
           ) : activePage === "billing" ? (
             <BillingPage />
           ) : (
@@ -1978,12 +2047,24 @@ function Dashboard() {
           </button>
         </Popup>
       )}
-      {screenLoading && (
+      {(screenLoading || dateFilterLoading) && (
         <Popup
-          label="Loading dashboard"
+          label={
+            dateFilterLoading
+              ? "Loading filtered transactions"
+              : "Loading dashboard"
+          }
           className="w-full flex justify-center items-center max-w-115 rounded-lgsm:p-7"
         >
-          <LuLoaderCircle className="animate-spin text-3xl" />
+          <div className="flex items-center gap-3 rounded-xl bg-white px-5 py-4 text-sm font-semibold text-[#29463a] shadow-xl">
+            <LuLoaderCircle
+              className="animate-spin text-2xl text-[#176044]"
+              aria-hidden="true"
+            />
+            {dateFilterLoading
+              ? "Loading transactions for selected dates..."
+              : "Loading dashboard..."}
+          </div>
         </Popup>
       )}
     </div>

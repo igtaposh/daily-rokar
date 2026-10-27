@@ -1,23 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  FiArrowLeft,
   FiArrowDownLeft,
   FiArrowUpRight,
-  FiPlus,
+  FiEdit2,
   FiTrash2,
   FiUser,
   FiX,
 } from "react-icons/fi";
 import { LuLoaderCircle } from "react-icons/lu";
-import axiosInstance from "../../api/axiosInstance";
-import Popup from "./Popup";
+import axiosInstance from "../../api/axiosInstance.js";
 import formatDateTime from "./formatDateTime";
 
 const initialForm = {
-  customerName: "",
-  description: "",
+  name: "",
+  address: "",
+  email: "",
+  phone: "",
+};
+
+const initialTransactionForm = {
+  customerId: "",
   type: "credit",
-  payment: "Cash",
   amount: "",
+  description: "",
+  payment: "Cash",
 };
 
 const getTransactionTime = (transaction) => {
@@ -31,16 +38,14 @@ const getCustomerName = (customer) =>
   customer.customerName || customer.name || "Unnamed customer";
 
 const getTransactions = (customer, type) => {
-  const transactions =
-    type === "credit"
-      ? customer.creditTransaction
-      : customer.paymentTransaction;
-
-  return Array.isArray(transactions) ? transactions : [];
+  return Array.isArray(customer.ledgers)
+    ? customer.ledgers.filter((transaction) => transaction.type === type)
+    : [];
 };
 
 const getTransactionDescription = (transaction) =>
-  transaction.description || (transaction.type === "credit" ? "Credit" : "Payment");
+  transaction.description ||
+  (transaction.type === "credit" ? "Credit" : "Payment");
 
 const getTransactionId = (transaction) =>
   transaction._id || transaction.id || "";
@@ -64,38 +69,27 @@ function LedgerTransaction({
 
   return (
     <article
-      className={`flex items-start gap-3 border-b border-[#e8eee8] py-4 last:border-b-0 ${
-        isCredit ? "flex-row-reverse text-right" : ""
+      className={`flex items-start gap-3 border-b  py-4 last:border-b-0 ${
+        isCredit
+          ? "flex-row-reverse text-right border-b-[#f0deda]"
+          : " border-b-[#dce9df]"
       }`}
     >
-      <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-          isCredit
-            ? "bg-[#f8e9e4] text-[#a04436]"
-            : "bg-[#e4f0e5] text-[#176044]"
-        }`}
-      >
-        {isCredit ? (
-          <FiArrowDownLeft size={17} aria-hidden="true" />
-        ) : (
-          <FiArrowUpRight size={17} aria-hidden="true" />
-        )}
-      </span>
       <div className={`min-w-0 flex-1 ${isCredit ? "text-right" : ""}`}>
+        <p
+          className={`mt-1 text-md font-bold ${
+            isCredit ? "text-[#a04436]" : "text-[#176044]"
+          }`}
+        >
+          {isCredit ? "+" : "−"}
+          {formatMoney(transaction.amount)}
+        </p>
         <p className="break-words text-sm font-semibold text-[#29463a]">
           {getTransactionDescription(transaction)}
         </p>
         <p className="mt-1 text-xs text-[#718078]">
           {formatDateTime(transaction.createdAt || transaction.date)}
           {!isCredit && transaction.payment ? ` · ${transaction.payment}` : ""}
-        </p>
-        <p
-          className={`mt-1 text-sm font-bold ${
-            isCredit ? "text-[#a04436]" : "text-[#176044]"
-          }`}
-        >
-          {isCredit ? "+" : "−"}
-          {formatMoney(transaction.amount)}
         </p>
       </div>
       <button
@@ -109,7 +103,11 @@ function LedgerTransaction({
         }`}
       >
         {isDeleting ? (
-          <LuLoaderCircle className="animate-spin" size={16} aria-hidden="true" />
+          <LuLoaderCircle
+            className="animate-spin"
+            size={16}
+            aria-hidden="true"
+          />
         ) : (
           <FiTrash2 size={15} aria-hidden="true" />
         )}
@@ -118,49 +116,169 @@ function LedgerTransaction({
   );
 }
 
-function CustomerDetailsPopup({
+function CustomerDetailsPage({
   customer,
-  onClose,
+  onBack,
   onDelete,
   deletingTransactionKey,
   error,
   onDismissError,
+  isLoading,
+  isEditing,
+  customerForm,
+  onCustomerFormChange,
+  onUpdateCustomer,
+  isUpdatingCustomer,
+  updateMessage,
+  isDeleteConfirmationOpen,
+  onRequestDelete,
+  onCancelDelete,
+  onDeleteCustomer,
+  isDeletingCustomer,
 }) {
   const credits = getTransactions(customer, "credit");
   const payments = getTransactions(customer, "payment");
 
   return (
-    <Popup
-      labelledBy="customerLedgerTitle"
-      className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-[#e8eee8] bg-white p-5 shadow-[0_24px_80px_rgba(0,0,0,0.2)] sm:p-7"
-    >
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#397354]">
-            Customer ledger
-          </p>
-          <h2
-            id="customerLedgerTitle"
-            className="mt-2 truncate text-xl font-bold tracking-tight text-[#18392f]"
-          >
-            {getCustomerName(customer)}
-          </h2>
-          <p className="mt-1 text-sm text-[#718078]">
-            Outstanding credit:{" "}
-            <span className="font-bold text-[#a04436]">
-              {formatMoney(customer.creditAmount)}
-            </span>
-          </p>
-        </div>
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6">
         <button
           type="button"
-          aria-label="Close customer ledger"
-          onClick={onClose}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#718078] transition hover:bg-[#edf3ef]"
+          onClick={onBack}
+          className="mb-5 inline-flex h-10 items-center gap-2 rounded-xl border border-[#d7e1da] px-3 text-sm font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
         >
-          <FiX size={18} aria-hidden="true" />
+          <FiArrowLeft size={16} aria-hidden="true" />
+          All customers
         </button>
-      </div>
+
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#397354]">
+              Customer ledger
+            </p>
+            <h2
+              id="customerLedgerTitle"
+              className="mt-2 truncate text-2xl font-bold tracking-tight text-[#18392f]"
+            >
+              {getCustomerName(customer)}
+            </h2>
+            <p className="mt-1 text-sm text-[#718078]">
+              Outstanding credit:{" "}
+              <span className="font-bold text-[#a04436]">
+                {formatMoney(customer.creditAmount)}
+              </span>
+            </p>
+            <p className="mt-1 text-sm text-[#718078]">
+              {customer.phone || "No phone"}{" "}
+              {customer.email ? ` · ${customer.email}` : ""}
+            </p>
+            {customer.address && (
+              <p className="mt-1 text-sm text-[#718078]">{customer.address}</p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onCustomerFormChange(null, true)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#d7e1da] px-3 text-sm font-semibold text-[#52685d] transition hover:border-[#397354] hover:text-[#176044]"
+            >
+              <FiEdit2 size={15} aria-hidden="true" />
+              Edit customer
+            </button>
+            <button
+              type="button"
+              onClick={onRequestDelete}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#f0deda] px-3 text-sm font-semibold text-[#a04436] transition hover:bg-[#fdf4f2]"
+            >
+              <FiTrash2 size={15} aria-hidden="true" />
+              Delete customer
+            </button>
+          </div>
+        </div>
+
+        {isEditing && (
+          <form
+            onSubmit={onUpdateCustomer}
+            className="mt-5 grid gap-4 rounded-2xl border border-[#e8eee8] bg-[#f9fbf9] p-4 sm:grid-cols-2"
+          >
+            {[
+              ["name", "Customer name"],
+              ["phone", "Phone"],
+              ["email", "Email"],
+              ["address", "Address"],
+            ].map(([name, label]) => (
+              <label
+                key={name}
+                className="block text-xs font-semibold text-[#52685d]"
+                htmlFor={`edit-customer-${name}`}
+              >
+                {label}
+                <input
+                  id={`edit-customer-${name}`}
+                  name={name}
+                  value={customerForm[name]}
+                  onChange={(event) => onCustomerFormChange(event)}
+                  className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+                />
+              </label>
+            ))}
+            <div className="flex flex-wrap gap-2 sm:col-span-2">
+              <button
+                type="submit"
+                disabled={isUpdatingCustomer}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isUpdatingCustomer ? (
+                  <LuLoaderCircle className="animate-spin" />
+                ) : null}
+                Save changes
+              </button>
+              <button
+                type="button"
+                onClick={() => onCustomerFormChange(null, false)}
+                disabled={isUpdatingCustomer}
+                className="h-10 rounded-xl border border-[#d7e1da] px-4 text-sm font-semibold text-[#52685d] transition hover:bg-white disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {updateMessage && (
+          <p role="status" className="mt-3 text-sm text-[#176044]">
+            {updateMessage}
+          </p>
+        )}
+        {isDeleteConfirmationOpen && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <p className="text-sm text-red-800">
+              Delete {getCustomerName(customer)}? This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onCancelDelete}
+                disabled={isDeletingCustomer}
+                className="h-9 rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onDeleteCustomer}
+                disabled={isDeletingCustomer}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-700 px-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {isDeletingCustomer && (
+                  <LuLoaderCircle className="animate-spin" />
+                )}
+                Confirm delete
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       {error && (
         <div
@@ -179,9 +297,22 @@ function CustomerDetailsPopup({
         </div>
       )}
 
+      {isLoading && (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 rounded-xl border border-[#dce6de] bg-white py-5 text-sm font-semibold text-[#52685d]"
+        >
+          <LuLoaderCircle
+            className="animate-spin text-lg text-[#397354]"
+            aria-hidden="true"
+          />
+          Loading full customer ledger...
+        </div>
+      )}
+
       <div className="grid gap-5 md:grid-cols-2">
         <section className="rounded-2xl border border-[#dce9df] bg-[#f8fbf8] p-4">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex items-center gap-2 border-b border-b-[#dce9df] pb-2 ">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e4f0e5] text-[#176044]">
               <FiArrowUpRight size={16} aria-hidden="true" />
             </span>
@@ -214,7 +345,7 @@ function CustomerDetailsPopup({
         </section>
 
         <section className="rounded-2xl border border-[#f0deda] bg-[#fdf9f8] p-4">
-          <div className="mb-2 flex items-center justify-end gap-2">
+          <div className="mb-2 flex items-center justify-end gap-2 border-b border-b-[#f0deda] pb-2">
             <div className="text-right">
               <h3 className="text-sm font-bold text-[#a04436]">Credits</h3>
               <p className="text-xs text-[#718078]">Amount owed</p>
@@ -246,20 +377,38 @@ function CustomerDetailsPopup({
           )}
         </section>
       </div>
-    </Popup>
+    </div>
   );
 }
 
-export default function CustomerLedgerPage() {
+export default function CustomerLedgerPage({
+  startDate,
+  endDate,
+  onDateFilterLoadingChange,
+}) {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerEditForm, setCustomerEditForm] = useState(initialForm);
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [isUpdatingCustomer, setIsUpdatingCustomer] = useState(false);
+  const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
+    useState(false);
+  const [customerUpdateMessage, setCustomerUpdateMessage] = useState("");
+  const [isLoadingCustomerLedger, setIsLoadingCustomerLedger] = useState(false);
   const [form, setForm] = useState(initialForm);
+  const [transactionForm, setTransactionForm] = useState(
+    initialTransactionForm,
+  );
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingTransaction, setIsSavingTransaction] = useState(false);
   const [deletingTransactionKey, setDeletingTransactionKey] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [transactionError, setTransactionError] = useState("");
+  const [transactionMessage, setTransactionMessage] = useState("");
   const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
@@ -268,12 +417,51 @@ export default function CustomerLedgerPage() {
       setIsLoading(true);
       setError("");
       try {
-        const response = await axiosInstance.get("/customer/all");
+        const [customerResponse, ledgerResponse] = await Promise.all([
+          axiosInstance.get("/customer"),
+          axiosInstance.get("/ledger", {
+            params: {
+              startDate,
+              endDate,
+            },
+          }),
+        ]);
         if (isCurrentRequest) {
-          if (!Array.isArray(response.data?.customers)) {
+          if (
+            !Array.isArray(customerResponse.data?.customers) ||
+            !Array.isArray(ledgerResponse.data?.ledgers)
+          ) {
             throw new Error("Unexpected customer list response.");
           }
-          setCustomers(response.data.customers);
+          const ledgersByCustomer = new Map();
+          ledgerResponse.data.ledgers.forEach((ledger) => {
+            const customerId =
+              typeof ledger.customerId === "object"
+                ? ledger.customerId?._id
+                : ledger.customerId;
+            if (!customerId) return;
+            const customerLedgers = ledgersByCustomer.get(customerId) || [];
+            customerLedgers.push(ledger);
+            ledgersByCustomer.set(customerId, customerLedgers);
+          });
+
+          setCustomers(
+            customerResponse.data.customers.map((customer) => {
+              const ledgers = ledgersByCustomer.get(customer._id) || [];
+              const creditAmount = ledgers.reduce(
+                (balance, ledger) =>
+                  balance +
+                  (ledger.type === "credit" ? 1 : -1) *
+                    Number(ledger.amount || 0),
+                0,
+              );
+              return {
+                ...customer,
+                ledgers,
+                creditAmount: Number(customer.amountBalance ?? creditAmount),
+              };
+            }),
+          );
         }
       } catch (requestError) {
         if (isCurrentRequest) {
@@ -284,7 +472,10 @@ export default function CustomerLedgerPage() {
           );
         }
       } finally {
-        if (isCurrentRequest) setIsLoading(false);
+        if (isCurrentRequest) {
+          setIsLoading(false);
+          onDateFilterLoadingChange?.(false);
+        }
       }
     };
     loadCustomers();
@@ -292,31 +483,30 @@ export default function CustomerLedgerPage() {
     return () => {
       isCurrentRequest = false;
     };
-  }, [refresh]);
+  }, [refresh, startDate, endDate, onDateFilterLoadingChange]);
 
-  const recentTransactions = useMemo(
-    () =>
-      customers
-        .flatMap((customer) => [
-          ...getTransactions(customer, "credit").map((transaction) => ({
-            customer,
-            transaction,
-            type: "credit",
-          })),
-          ...getTransactions(customer, "payment").map((transaction) => ({
-            customer,
-            transaction,
-            type: "payment",
-          })),
-        ])
-        .sort(
-          (left, right) =>
-            getTransactionTime(right.transaction) -
-            getTransactionTime(left.transaction),
-        )
-        .slice(0, 10),
-    [customers],
-  );
+  const recentTransactions = useMemo(() => {
+    const transactions = customers
+      .flatMap((customer) => [
+        ...getTransactions(customer, "credit").map((transaction) => ({
+          customer,
+          transaction,
+          type: "credit",
+        })),
+        ...getTransactions(customer, "payment").map((transaction) => ({
+          customer,
+          transaction,
+          type: "payment",
+        })),
+      ])
+      .sort(
+        (left, right) =>
+          getTransactionTime(right.transaction) -
+          getTransactionTime(left.transaction),
+      );
+
+    return transactions;
+  }, [customers]);
 
   const totalOutstanding = customers.reduce(
     (total, customer) => total + Number(customer.creditAmount || 0),
@@ -328,60 +518,266 @@ export default function CustomerLedgerPage() {
     setForm((current) => ({ ...current, [name]: value }));
   };
 
-  const handleTypeChange = (event) => {
+  const updateTransactionForm = (event) => {
+    const { name, value } = event.target;
+    setTransactionForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleTransactionTypeChange = (event) => {
     const type = event.target.value;
-    setForm((current) => ({
+    setTransactionForm((current) => ({
       ...current,
       type,
-      payment: type === "payment" ? current.payment || "Cash" : "",
+      payment: type === "payment" ? current.payment || "Cash" : "Cash",
     }));
   };
 
-  const handleCreateTransaction = async (event) => {
+  const handleCreateLedgerEntry = async (event) => {
+    event.preventDefault();
+    setTransactionError("");
+    setTransactionMessage("");
+
+    const amount = Number(transactionForm.amount);
+    const description = transactionForm.description.trim();
+
+    if (
+      !customers.some((customer) => customer._id === transactionForm.customerId)
+    ) {
+      setTransactionError("Select a customer for this ledger entry.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount < 1) {
+      setTransactionError("Enter an amount of at least ₹1.");
+      return;
+    }
+    if (description && description.length < 5) {
+      setTransactionError("Description must contain at least 5 characters.");
+      return;
+    }
+
+    setIsSavingTransaction(true);
+    try {
+      await axiosInstance.post(
+        `/ledger/create/${encodeURIComponent(transactionForm.customerId)}`,
+        {
+          type: transactionForm.type,
+          amount,
+          description,
+          ...(transactionForm.type === "payment"
+            ? { payment: transactionForm.payment }
+            : {}),
+        },
+      );
+      setTransactionForm(initialTransactionForm);
+      setTransactionMessage(
+        transactionForm.type === "credit"
+          ? "Credit added to the customer ledger."
+          : "Payment received and added to the customer ledger.",
+      );
+      setRefresh((current) => current + 1);
+    } catch (requestError) {
+      setTransactionError(
+        requestError.response?.data?.message ||
+          "Unable to save this ledger entry. Please try again.",
+      );
+    } finally {
+      setIsSavingTransaction(false);
+    }
+  };
+
+  const handleCreateCustomer = async (event) => {
     event.preventDefault();
     setError("");
     setMessage("");
 
-    const customerName = form.customerName.trim();
-    const description = form.description.trim();
-    const amount = Number(form.amount);
-    if (customerName.length < 2) {
+    const name = form.name.trim();
+    const address = form.address.trim();
+    const phone = form.phone.trim();
+    const email = form.email.trim();
+    if (name.length < 2) {
       setError("Enter a customer name with at least 2 characters.");
       return;
     }
-    if (description.length < 2) {
-      setError("Enter a description with at least 2 characters.");
-      return;
+    if (address) {
+      if (address.length < 2) {
+        setError("Enter a description with at least 2 characters.");
+        return;
+      }
     }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError("Enter an amount greater than zero.");
-      return;
+    if (phone) {
+      if (phone.length != 10) {
+        setError("Phone number can't be more or less than 10.");
+        return;
+      }
     }
-
     setIsSaving(true);
     try {
       await axiosInstance.post("/customer/create", {
-        customerName,
-        description,
-        type: form.type,
-        ...(form.type === "payment" ? { payment: form.payment } : {}),
-        amount,
+        name,
+        address,
+        phone,
+        email,
       });
       setForm(initialForm);
       setIsFormOpen(false);
-      setMessage("Customer ledger transaction added.");
+      setMessage("Customer added successfully.");
       setRefresh((current) => current + 1);
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
-          "Unable to add this customer transaction. Please try again.",
+          "Unable to add this customer. Please try again.",
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDeleteTransaction = async (customer, transaction, type) => {
+  const handleOpenCustomerLedger = async (customer) => {
+    setSelectedCustomer(customer);
+    setIsLoadingCustomerLedger(true);
+    setError("");
+    setIsEditingCustomer(false);
+    setIsDeleteConfirmationOpen(false);
+    setCustomerUpdateMessage("");
+    try {
+      const response = await axiosInstance.get(
+        `/ledger/${encodeURIComponent(customer._id)}`,
+      );
+      if (!Array.isArray(response.data?.ledgers)) {
+        throw new Error("Unexpected customer ledger response.");
+      }
+      setSelectedCustomer((current) =>
+        current?._id === customer._id
+          ? { ...current, ledgers: response.data.ledgers }
+          : current,
+      );
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          requestError.message ||
+          "Unable to load this customer ledger. Please try again.",
+      );
+    } finally {
+      setIsLoadingCustomerLedger(false);
+    }
+  };
+
+  const handleCustomerFormChange = (event, editing) => {
+    if (event) {
+      const { name, value } = event.target;
+      setCustomerEditForm((current) => ({ ...current, [name]: value }));
+      return;
+    }
+
+    if (editing) {
+      setCustomerEditForm({
+        name: selectedCustomer.name || "",
+        phone: selectedCustomer.phone || "",
+        email: selectedCustomer.email || "",
+        address: selectedCustomer.address || "",
+      });
+      setError("");
+      setCustomerUpdateMessage("");
+      setIsEditingCustomer(true);
+      return;
+    }
+
+    setIsEditingCustomer(false);
+    setError("");
+  };
+
+  const handleUpdateCustomer = async (event) => {
+    event.preventDefault();
+    if (!selectedCustomer?._id) return;
+
+    const updates = {
+      name: customerEditForm.name.trim(),
+      phone: customerEditForm.phone.trim(),
+      email: customerEditForm.email.trim(),
+      address: customerEditForm.address.trim(),
+    };
+
+    if (updates.name.length < 3) {
+      setError("Customer name must contain at least 3 characters.");
+      return;
+    }
+    if (updates.phone && !/^[6-9]\d{9}$/.test(updates.phone)) {
+      setError("Enter a valid 10-digit Indian mobile number.");
+      return;
+    }
+    if (updates.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updates.email)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (updates.address && updates.address.length < 5) {
+      setError("Address must contain at least 5 characters.");
+      return;
+    }
+
+    setIsUpdatingCustomer(true);
+    setError("");
+    setCustomerUpdateMessage("");
+    try {
+      const response = await axiosInstance.patch(
+        `/customer/update/${encodeURIComponent(selectedCustomer._id)}`,
+        updates,
+      );
+      const updatedCustomer = response.data?.updatedCustomer;
+      if (!updatedCustomer) {
+        throw new Error("Unexpected customer update response.");
+      }
+
+      const mergedCustomer = {
+        ...selectedCustomer,
+        ...updatedCustomer,
+        ledgers: selectedCustomer.ledgers,
+        creditAmount: selectedCustomer.creditAmount,
+      };
+      setCustomers((current) =>
+        current.map((customer) =>
+          customer._id === mergedCustomer._id ? mergedCustomer : customer,
+        ),
+      );
+      setSelectedCustomer(mergedCustomer);
+      setIsEditingCustomer(false);
+      setCustomerUpdateMessage("Customer details updated.");
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          requestError.message ||
+          "Unable to update this customer. Please try again.",
+      );
+    } finally {
+      setIsUpdatingCustomer(false);
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!selectedCustomer?._id) return;
+
+    setIsDeletingCustomer(true);
+    setError("");
+    try {
+      await axiosInstance.delete(
+        `/customer/delete/${encodeURIComponent(selectedCustomer._id)}`,
+      );
+      setCustomers((current) =>
+        current.filter((customer) => customer._id !== selectedCustomer._id),
+      );
+      setSelectedCustomer(null);
+      setIsDeleteConfirmationOpen(false);
+      setRefresh((current) => current + 1);
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          "Unable to delete this customer. Please try again.",
+      );
+    } finally {
+      setIsDeletingCustomer(false);
+    }
+  };
+
+  const handleDeleteTransaction = async (customer, transaction) => {
     const transactionId = getTransactionId(transaction);
     if (!customer._id || !transactionId) {
       setError("This transaction is missing an ID and cannot be deleted.");
@@ -393,11 +789,21 @@ export default function CustomerLedgerPage() {
     setError("");
     try {
       await axiosInstance.delete(
-        `/customer/transaction/${encodeURIComponent(customer._id)}/${encodeURIComponent(transactionId)}`,
-        { data: { type } },
+        `/ledger/delete/${encodeURIComponent(transactionId)}`,
       );
       setSelectedCustomer((current) =>
-        current?._id === customer._id ? null : current,
+        current?._id === customer._id
+          ? {
+              ...current,
+              ledgers: (current.ledgers || []).filter(
+                (ledger) => getTransactionId(ledger) !== transactionId,
+              ),
+              creditAmount:
+                Number(current.creditAmount || 0) +
+                (transaction.type === "credit" ? -1 : 1) *
+                  Number(transaction.amount || 0),
+            }
+          : current,
       );
       setRefresh((current) => current + 1);
     } catch (requestError) {
@@ -414,10 +820,7 @@ export default function CustomerLedgerPage() {
     <button
       key={customer._id}
       type="button"
-      onClick={() => {
-        setError("");
-        setSelectedCustomer(customer);
-      }}
+      onClick={() => handleOpenCustomerLedger(customer)}
       className="flex w-full items-center gap-3 rounded-xl border border-[#e8eee8] bg-white p-4 text-left transition hover:border-[#a9c59e] hover:bg-[#f8fbf8]"
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e4f0e5] text-[#176044]">
@@ -443,6 +846,39 @@ export default function CustomerLedgerPage() {
     </button>
   ));
 
+  if (selectedCustomer) {
+    return (
+      <CustomerDetailsPage
+        customer={selectedCustomer}
+        onBack={() => {
+          setSelectedCustomer(null);
+          setError("");
+          setIsEditingCustomer(false);
+          setIsDeleteConfirmationOpen(false);
+        }}
+        onDelete={handleDeleteTransaction}
+        deletingTransactionKey={deletingTransactionKey}
+        error={error}
+        onDismissError={() => setError("")}
+        isLoading={isLoadingCustomerLedger}
+        isEditing={isEditingCustomer}
+        customerForm={customerEditForm}
+        onCustomerFormChange={handleCustomerFormChange}
+        onUpdateCustomer={handleUpdateCustomer}
+        isUpdatingCustomer={isUpdatingCustomer}
+        updateMessage={customerUpdateMessage}
+        isDeleteConfirmationOpen={isDeleteConfirmationOpen}
+        onRequestDelete={() => {
+          setError("");
+          setIsDeleteConfirmationOpen(true);
+        }}
+        onCancelDelete={() => setIsDeleteConfirmationOpen(false)}
+        onDeleteCustomer={handleDeleteCustomer}
+        isDeletingCustomer={isDeletingCustomer}
+      />
+    );
+  }
+
   return (
     <div className="space-y-5">
       <section
@@ -467,159 +903,221 @@ export default function CustomerLedgerPage() {
         </article>
       </section>
 
-      <section className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="grid items-start gap-5 rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6 lg:grid-cols-[7fr_3fr]">
+        <div>
           <div>
             <h2 className="text-lg font-bold tracking-tight text-[#18392f]">
-              Add customer ledger entry
+              Create a credit or receive a payment
             </h2>
             <p className="mt-1 text-sm text-[#718078]">
-              Record credit or a cash/online payment.
+              Record a customer credit or a payment received against their
+              balance.
             </p>
           </div>
-          {!isFormOpen && (
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setMessage("");
-                setIsFormOpen(true);
-              }}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#176044] px-4 text-sm font-bold text-white transition hover:bg-[#124d36]"
-            >
-              <FiPlus size={16} aria-hidden="true" />
-              Add entry
-            </button>
-          )}
-          {isFormOpen && (
-            <button
-              type="button"
-              aria-label="Close customer entry form"
-              onClick={() => setIsFormOpen(false)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-[#718078] transition hover:bg-[#edf3ef]"
-            >
-              <FiX size={17} aria-hidden="true" />
-            </button>
-          )}
-        </div>
 
-        {isFormOpen && (
           <form
-            onSubmit={handleCreateTransaction}
+            onSubmit={handleCreateLedgerEntry}
             className="mt-5 grid gap-4 rounded-2xl border border-[#e8eee8] bg-[#f9fbf9] p-4 sm:grid-cols-2"
           >
             <label
               className="block text-xs font-semibold text-[#52685d]"
-              htmlFor="customerName"
+              htmlFor="ledger-customer"
+            >
+              Customer
+              <select
+                id="ledger-customer"
+                name="customerId"
+                value={transactionForm.customerId}
+                onChange={updateTransactionForm}
+                required
+                disabled={isLoading || !customers.length}
+                className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10 disabled:cursor-not-allowed disabled:bg-[#f1f4f1]"
+              >
+                <option value="">
+                  {customers.length
+                    ? "Select a customer"
+                    : "No customers available"}
+                </option>
+                {customers.map((customer) => (
+                  <option key={customer._id} value={customer._id}>
+                    {getCustomerName(customer)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              className="block text-xs font-semibold text-[#52685d]"
+              htmlFor="ledger-type"
+            >
+              Entry type
+              <select
+                id="ledger-type"
+                name="type"
+                value={transactionForm.type}
+                onChange={handleTransactionTypeChange}
+                className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+              >
+                <option value="credit">Credit given</option>
+                <option value="payment">Payment received</option>
+              </select>
+            </label>
+            <label
+              className="block text-xs font-semibold text-[#52685d]"
+              htmlFor="ledger-amount"
+            >
+              Amount
+              <input
+                id="ledger-amount"
+                name="amount"
+                type="number"
+                min="1"
+                step="0.01"
+                value={transactionForm.amount}
+                onChange={updateTransactionForm}
+                required
+                placeholder="Enter amount"
+                className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+              />
+            </label>
+            {transactionForm.type === "payment" && (
+              <label
+                className="block text-xs font-semibold text-[#52685d]"
+                htmlFor="ledger-payment"
+              >
+                Payment received by
+                <select
+                  id="ledger-payment"
+                  name="payment"
+                  value={transactionForm.payment}
+                  onChange={updateTransactionForm}
+                  className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="Online">Online</option>
+                </select>
+              </label>
+            )}
+            <label
+              className="block text-xs font-semibold text-[#52685d] sm:col-span-2"
+              htmlFor="ledger-description"
+            >
+              Description{" "}
+              <span className="font-normal text-[#839188]">(optional)</span>
+              <input
+                id="ledger-description"
+                name="description"
+                value={transactionForm.description}
+                onChange={updateTransactionForm}
+                placeholder="Add a note (at least 5 characters)"
+                className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+              />
+            </label>
+            <div className="sm:col-span-2">
+              {transactionError && (
+                <p role="alert" className="mb-3 text-sm text-red-700">
+                  {transactionError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={isSavingTransaction || isLoading || !customers.length}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#176044] text-sm font-bold text-white transition hover:bg-[#124d36] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSavingTransaction ? (
+                  <LuLoaderCircle className="animate-spin text-xl" />
+                ) : transactionForm.type === "credit" ? (
+                  "Save credit"
+                ) : (
+                  "Record payment"
+                )}
+              </button>
+              {transactionMessage && (
+                <p role="status" className="mt-3 text-sm text-[#176044]">
+                  {transactionMessage}
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
+
+        <div className="rounded-2xl border border-[#e8eee8] bg-[#f9fbf9] p-4 sm:p-5">
+          <h3 className="text-base font-bold tracking-tight text-[#18392f]">
+            Add a customer
+          </h3>
+          <p className="mt-1 text-sm text-[#718078]">
+            Create a customer before recording their first entry.
+          </p>
+          <form onSubmit={handleCreateCustomer} className="mt-4 space-y-4">
+            <label
+              className="block text-xs font-semibold text-[#52685d]"
+              htmlFor="name"
             >
               Customer name
               <input
-                id="customerName"
-                name="customerName"
-                value={form.customerName}
+                id="name"
+                name="name"
+                value={form.name}
                 onChange={updateForm}
                 autoComplete="off"
                 placeholder="Customer name"
                 className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
               />
             </label>
-
             <label
               className="block text-xs font-semibold text-[#52685d]"
-              htmlFor="customerEntryType"
+              htmlFor="phone"
             >
-              Entry type
-              <select
-                id="customerEntryType"
-                name="type"
-                value={form.type}
-                onChange={handleTypeChange}
-                className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-              >
-                <option value="credit">Credit</option>
-                <option value="payment">Payment</option>
-              </select>
-            </label>
-
-            <label
-              className="block text-xs font-semibold text-[#52685d]"
-              htmlFor="customerDescription"
-            >
-              Description
+              Customer phone
               <input
-                id="customerDescription"
-                name="description"
-                value={form.description}
+                id="phone"
+                name="phone"
+                value={form.phone.replace(/\D/g, "").slice(0, 10)}
+                maxLength={10}
                 onChange={updateForm}
-                placeholder="What was this entry for?"
+                autoComplete="off"
+                placeholder="Customer phone"
+                className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
+              />
+            </label>
+            <label
+              className="block text-xs font-semibold text-[#52685d]"
+              htmlFor="email"
+            >
+              Customer email
+              <input
+                id="email"
+                name="email"
+                value={form.email}
+                onChange={updateForm}
+                autoComplete="off"
+                placeholder="Customer email"
                 className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
               />
             </label>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {form.type === "payment" && (
-                <label
-                  className="block text-xs font-semibold text-[#52685d]"
-                  htmlFor="customerPaymentMethod"
-                >
-                  Payment method
-                  <select
-                    id="customerPaymentMethod"
-                    name="payment"
-                    value={form.payment}
-                    onChange={updateForm}
-                    className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                  >
-                    <option>Cash</option>
-                    <option>Online</option>
-                  </select>
-                </label>
+            {error && (
+              <p role="alert" className="text-sm text-red-700">
+                {error}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#176044] text-sm font-bold text-white transition hover:bg-[#124d36] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSaving ? (
+                <LuLoaderCircle className="animate-spin text-xl" />
+              ) : (
+                "Save customer"
               )}
-              <label
-                className="block text-xs font-semibold text-[#52685d]"
-                htmlFor="customerAmount"
-              >
-                Amount
-                <input
-                  id="customerAmount"
-                  name="amount"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={form.amount}
-                  onChange={updateForm}
-                  placeholder="0"
-                  className="mt-1.5 h-11 w-full rounded-xl border border-[#d7e1da] bg-white px-3 text-sm font-normal text-[#18392f] outline-none placeholder:text-[#98a79e] focus:border-[#397354] focus:ring-4 focus:ring-[#397354]/10"
-                />
-              </label>
-            </div>
-
-            <div className="sm:col-span-2">
-              {error && (
-                <p role="alert" className="mb-3 text-sm text-red-700">
-                  {error}
-                </p>
-              )}
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#176044] text-sm font-bold text-white transition hover:bg-[#124d36] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isSaving ? (
-                  <LuLoaderCircle className="animate-spin text-xl" />
-                ) : (
-                  `Save ${form.type}`
-                )}
-              </button>
-            </div>
+            </button>
           </form>
-        )}
-        {message && (
-          <p role="status" className="mt-3 text-sm text-[#176044]">
-            {message}
-          </p>
-        )}
+          {message && (
+            <p role="status" className="mt-3 text-sm text-[#176044]">
+              {message}
+            </p>
+          )}
+        </div>
       </section>
 
       {error && !isFormOpen && (
@@ -669,12 +1167,18 @@ export default function CustomerLedgerPage() {
 
         <section className="rounded-2xl border border-[#dce6de] bg-white p-5 shadow-[0_6px_22px_rgba(24,57,47,0.04)] sm:p-6">
           <div className="mb-4">
-            <h2 className="text-lg font-bold tracking-tight text-[#18392f]">
-              Recent customer transactions
-            </h2>
-            <p className="mt-1 text-sm text-[#718078]">
-              Latest credits and payments across your customers.
-            </p>
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-[#18392f]">
+                Recent customer transactions
+              </h2>
+              <p className="mt-1 text-sm text-[#718078]">
+                {startDate && endDate
+                  ? startDate === endDate
+                    ? `Credits and payments for ${startDate}.`
+                    : `Credits and payments from ${startDate} to ${endDate}.`
+                  : "Latest credits and payments across your customers."}
+              </p>
+            </div>
           </div>
           {isLoading ? (
             <div className="flex justify-center py-10">
@@ -685,70 +1189,65 @@ export default function CustomerLedgerPage() {
             </div>
           ) : recentTransactions.length ? (
             <div className="divide-y divide-[#e8eee8]">
-              {recentTransactions.map(({ customer, transaction, type }, index) => (
-                <button
-                  key={
-                    getTransactionId(transaction) ||
-                    `${customer._id}-${type}-${index}`
-                  }
-                  type="button"
-                  onClick={() => setSelectedCustomer(customer)}
-                  className="flex w-full items-center gap-3 py-3 text-left transition hover:bg-[#fbfdfb]"
-                >
-                  <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                      type === "credit"
-                        ? "bg-[#f8e9e4] text-[#a04436]"
-                        : "bg-[#e4f0e5] text-[#176044]"
-                    }`}
+              {recentTransactions.map(
+                ({ customer, transaction, type }, index) => (
+                  <button
+                    key={
+                      getTransactionId(transaction) ||
+                      `${customer._id}-${type}-${index}`
+                    }
+                    type="button"
+                    onClick={() => handleOpenCustomerLedger(customer)}
+                    className="flex w-full items-center gap-3 py-3 text-left transition hover:bg-[#fbfdfb]"
                   >
-                    {type === "credit" ? (
-                      <FiArrowDownLeft size={17} aria-hidden="true" />
-                    ) : (
-                      <FiArrowUpRight size={17} aria-hidden="true" />
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-[#29463a]">
-                      {getCustomerName(customer)} ·{" "}
-                      {getTransactionDescription(transaction)}
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                        type === "credit"
+                          ? "bg-[#f8e9e4] text-[#a04436]"
+                          : "bg-[#e4f0e5] text-[#176044]"
+                      }`}
+                    >
+                      {type === "credit" ? (
+                        <FiArrowDownLeft size={17} aria-hidden="true" />
+                      ) : (
+                        <FiArrowUpRight size={17} aria-hidden="true" />
+                      )}
                     </span>
-                    <span className="mt-1 block text-xs text-[#718078]">
-                      {type === "credit" ? "Credit" : "Payment"}
-                      {transaction.payment ? ` · ${transaction.payment}` : ""}
-                      {" · "}
-                      {formatDateTime(transaction.createdAt || transaction.date)}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-[#29463a]">
+                        {getCustomerName(customer)} ·{" "}
+                        {getTransactionDescription(transaction)}
+                      </span>
+                      <span className="mt-1 block text-xs text-[#718078]">
+                        {type === "credit" ? "Credit" : "Payment"}
+                        {transaction.payment ? ` · ${transaction.payment}` : ""}
+                        {" · "}
+                        {formatDateTime(
+                          transaction.createdAt || transaction.date,
+                        )}
+                      </span>
                     </span>
-                  </span>
-                  <span
-                    className={`shrink-0 text-sm font-bold ${
-                      type === "credit" ? "text-[#a04436]" : "text-[#176044]"
-                    }`}
-                  >
-                    {type === "credit" ? "+" : "−"}
-                    {formatMoney(transaction.amount)}
-                  </span>
-                </button>
-              ))}
+                    <span
+                      className={`shrink-0 text-sm font-bold ${
+                        type === "credit" ? "text-[#a04436]" : "text-[#176044]"
+                      }`}
+                    >
+                      {type === "credit" ? "+" : "−"}
+                      {formatMoney(transaction.amount)}
+                    </span>
+                  </button>
+                ),
+              )}
             </div>
           ) : (
             <p className="rounded-xl border border-dashed border-[#d7e1da] px-4 py-8 text-center text-sm text-[#839188]">
-              No customer transactions yet.
+              {startDate || endDate
+                ? "No customer transactions for this date range."
+                : "No customer transactions yet."}
             </p>
           )}
         </section>
       </div>
-
-      {selectedCustomer && (
-        <CustomerDetailsPopup
-          customer={selectedCustomer}
-          onClose={() => setSelectedCustomer(null)}
-          onDelete={handleDeleteTransaction}
-          deletingTransactionKey={deletingTransactionKey}
-          error={error}
-          onDismissError={() => setError("")}
-        />
-      )}
     </div>
   );
 }
